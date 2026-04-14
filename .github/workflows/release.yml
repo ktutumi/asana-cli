@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive_ext: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            archive_ext: tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            archive_ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo build
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: package binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp README.md dist/
+          cp target/${{ matrix.target }}/release/asana-cli dist/
+          tar -C dist -czf asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz README.md asana-cli
+      - name: upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
