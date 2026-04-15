@@ -1,21 +1,23 @@
 # skills
 
-このディレクトリには、このリポジトリの CLI を AI Agent が安全かつ一貫して扱うための Skill を置きます。
+Language: English | [日本語](README.ja.md)
 
-目的:
-- 実コマンド実行時の手順を標準化する
-- 認証や出力形式の扱いを統一する
-- 実装知識と運用知識を分離する
+This directory contains skills that let AI agents operate the CLI in this repository safely and consistently.
 
-含まれる Skill:
+Goals:
+- Standardize the procedure for running real commands
+- Keep authentication and output-format handling consistent
+- Separate implementation knowledge from operational knowledge
+
+Included skills:
 - `asana-cli-operator/`
-  - `asana-cli` を使って認証状態の確認、workspace / project / task / comment / attachment 取得、token refresh などを行うための運用 Skill
+  - An operational skill for using `asana-cli` to check authentication status, fetch workspaces / projects / tasks / comments / attachments, and refresh tokens
 
-使い分け:
-- CLI 自体を実装・修正する場合は、コードとテストを読む
-- CLI を実際に使って確認・取得する場合は、このディレクトリの Skill を使う
+How to use them:
+- If you are implementing or modifying the CLI itself, read the code and tests
+- If you are actually using the CLI to inspect or fetch data, use the skills in this directory
 
-現在の構成:
+Current structure:
 ```text
 skills/
   README.md
@@ -23,7 +25,7 @@ skills/
     SKILL.md
 ```
 
-補足:
-- `asana-cli-operator` はまず `auth status` を確認してから API read を行う前提です
-- comment 本文が必要な場合は `tasks stories` ではなく `tasks comments` を優先します
-- localhost OAuth login と OOB/manual flow は別物として扱います
+Notes:
+- `asana-cli-operator` assumes you check `auth status` before reading from the API
+- If you need the comment body, prefer `tasks comments` over `tasks stories`
+- Treat localhost OAuth login and the OOB/manual flow as separate flows
