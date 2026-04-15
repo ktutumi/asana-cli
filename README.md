@@ -2,7 +2,7 @@
 
 Language: English | [日本語](README.ja.md)
 
-A personal Asana OAuth CLI written in Rust. It ports the main features of the existing `asana-oauth-cli` to Rust and is structured for distributing macOS and Linux binaries through GitHub Releases.
+A personal Asana OAuth CLI written in Rust, structured for distributing macOS and Linux binaries through GitHub Releases.
 
 Key features:
 - Generate an authorization URL with `auth url`
