@@ -175,6 +175,79 @@ async fn fetches_me_workspaces_and_paginated_resources() {
 }
 
 #[tokio::test]
+async fn lists_only_comment_stories_with_text_fields() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/tasks/12345/stories"))
+        .and(query_param(
+            "opt_fields",
+            "gid,resource_subtype,resource_type,text,html_text,created_at,created_by.name",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [
+                {
+                    "gid": "story-1",
+                    "resource_subtype": "comment_added",
+                    "resource_type": "story",
+                    "text": "Looks good",
+                    "html_text": "<body>Looks good</body>",
+                    "created_at": "2026-04-14T03:00:00.000Z",
+                    "created_by": { "name": "Alice" }
+                },
+                {
+                    "gid": "story-2",
+                    "resource_subtype": "assigned",
+                    "resource_type": "story",
+                    "text": "assigned this task to Alice"
+                },
+                {
+                    "gid": "story-3",
+                    "resource_subtype": "comment_added",
+                    "resource_type": "story",
+                    "text": "Please ship it",
+                    "html_text": "<body>Please ship it</body>",
+                    "created_at": "2026-04-14T04:00:00.000Z",
+                    "created_by": { "name": "Bob" }
+                }
+            ],
+            "next_page": null
+        })))
+        .mount(&server)
+        .await;
+
+    let client =
+        AsanaClient::new(server.uri(), format!("{}/-/oauth_token", server.uri())).expect("client");
+    let comments = client
+        .list_comments("access-1", "12345")
+        .await
+        .expect("comments");
+
+    assert_eq!(
+        comments,
+        vec![
+            json!({
+                "gid": "story-1",
+                "resource_subtype": "comment_added",
+                "resource_type": "story",
+                "text": "Looks good",
+                "html_text": "<body>Looks good</body>",
+                "created_at": "2026-04-14T03:00:00.000Z",
+                "created_by": { "name": "Alice" }
+            }),
+            json!({
+                "gid": "story-3",
+                "resource_subtype": "comment_added",
+                "resource_type": "story",
+                "text": "Please ship it",
+                "html_text": "<body>Please ship it</body>",
+                "created_at": "2026-04-14T04:00:00.000Z",
+                "created_by": { "name": "Bob" }
+            })
+        ]
+    );
+}
+
+#[tokio::test]
 async fn joins_asana_error_messages_when_a_request_fails() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))

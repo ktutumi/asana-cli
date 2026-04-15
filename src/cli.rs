@@ -180,6 +180,10 @@ enum TaskSubcommand {
         #[arg(long)]
         task: String,
     },
+    Comments {
+        #[arg(long)]
+        task: String,
+    },
     Attachments {
         #[arg(long)]
         task: String,
@@ -276,6 +280,9 @@ pub async fn run_cli<S: AsRef<str>>(
                 )?),
                 TaskSubcommand::Stories { task } => io.stdout(serde_json::to_string_pretty(
                     &api_client.list_stories(&access_token, &task).await?,
+                )?),
+                TaskSubcommand::Comments { task } => io.stdout(serde_json::to_string_pretty(
+                    &api_client.list_comments(&access_token, &task).await?,
                 )?),
                 TaskSubcommand::Attachments { task } => io.stdout(serde_json::to_string_pretty(
                     &api_client.list_attachments(&access_token, &task).await?,

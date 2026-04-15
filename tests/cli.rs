@@ -307,6 +307,19 @@ async fn routes_me_workspaces_and_task_commands_through_the_saved_access_token()
         ))
         .mount(&server)
         .await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/tasks/task-1/stories"))
+        .and(query_param(
+            "opt_fields",
+            "gid,resource_subtype,resource_type,text,html_text,created_at,created_by.name",
+        ))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"story-1","resource_subtype":"comment_added","resource_type":"story","text":"Looks good","html_text":"<body>Looks good</body>","created_at":"2026-04-14T03:00:00.000Z","created_by":{"name":"Alice"}},{"gid":"story-2","resource_subtype":"assigned","resource_type":"story","text":"assigned this task to Alice"}],"next_page":null}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
 
     let temp = tempdir().expect("tempdir");
     let config_path = write_config(temp.path().join("credentials.json"));
@@ -356,12 +369,33 @@ async fn routes_me_workspaces_and_task_commands_through_the_saved_access_token()
                 "task-1",
             ],
             &task_io,
-            runtime,
+            runtime.clone(),
         )
         .await,
         0
     );
     assert!(task_io.stdout_lines()[0].contains("Buy groceries"));
+
+    let comments_io = BufferedCliIo::default();
+    assert_eq!(
+        run_cli_catching(
+            &[
+                "--config",
+                config_path.to_str().expect("config path"),
+                "tasks",
+                "comments",
+                "--task",
+                "task-1",
+            ],
+            &comments_io,
+            runtime,
+        )
+        .await,
+        0
+    );
+    let comments_output = comments_io.stdout_lines().join("\n");
+    assert!(comments_output.contains("Looks good"));
+    assert!(!comments_output.contains("assigned this task to Alice"));
 }
 
 fn write_config(path: PathBuf) -> PathBuf {

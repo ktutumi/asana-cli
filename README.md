@@ -10,7 +10,7 @@ Rust で書いた個人利用向け Asana OAuth CLI です。既存の `asana-oa
 - `me`
 - `workspaces list`
 - `projects list` / `project list`
-- `tasks list|get|subtasks|stories|attachments`
+- `tasks list|get|subtasks|stories|comments|attachments`
 
 セキュリティ/UX 方針:
 - 設定ファイルは XDG Base Directory (`$XDG_CONFIG_HOME/asana-cli/credentials.json`) を優先
@@ -98,8 +98,14 @@ asana-cli tasks list --project 456
 asana-cli tasks get --task 789
 asana-cli tasks subtasks --task 789
 asana-cli tasks stories --task 789
+asana-cli tasks comments --task 789
 asana-cli tasks attachments --task 789
 ```
+
+補足:
+- `tasks stories` は task の story 履歴全体を返しますが、Asana API の compact record が中心です。
+- `tasks comments` は `comment_added` の story だけを抽出し、本文表示に必要な `text` / `html_text` / `created_at` / `created_by.name` を含めて返します。
+- コメント本文を確認したい場合は `tasks comments` を使ってください。
 
 ## 設定ファイル
 

@@ -147,6 +147,22 @@ impl AsanaClient {
         .await
     }
 
+    pub async fn list_comments(&self, access_token: &str, task_gid: &str) -> Result<Vec<Value>> {
+        let mut url = self.join_segments(&["tasks", task_gid, "stories"])?;
+        url.query_pairs_mut().append_pair(
+            "opt_fields",
+            "gid,resource_subtype,resource_type,text,html_text,created_at,created_by.name",
+        );
+
+        let stories = self.get_paginated(access_token, url).await?;
+        Ok(stories
+            .into_iter()
+            .filter(|story| {
+                story.get("resource_subtype").and_then(Value::as_str) == Some("comment_added")
+            })
+            .collect())
+    }
+
     pub async fn list_attachments(&self, access_token: &str, task_gid: &str) -> Result<Vec<Value>> {
         self.get_paginated(
             access_token,
