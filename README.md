@@ -1,26 +1,28 @@
 # asana-cli
 
-Rust で書いた個人利用向け Asana OAuth CLI です。既存の `asana-oauth-cli` の主要機能を Rust に移植し、GitHub Releases から macOS / Linux 向けバイナリを配布できる前提で構成しています。
+Language: English | [日本語](README.ja.md)
 
-主な機能:
-- `auth url` で認可 URL を生成
-- `auth exchange` で authorization code を token に交換
-- `auth login` で localhost callback による自動ログイン
-- `auth status` で保存済み認証情報の状態を確認
-- `auth refresh` で refresh token を使って access token を更新
+A personal Asana OAuth CLI written in Rust. It ports the main features of the existing `asana-oauth-cli` to Rust and is structured for distributing macOS and Linux binaries through GitHub Releases.
+
+Key features:
+- Generate an authorization URL with `auth url`
+- Exchange an authorization code for a token with `auth exchange`
+- Complete automatic login via a localhost callback with `auth login`
+- Check the status of saved credentials with `auth status`
+- Refresh the access token with a refresh token via `auth refresh`
 - `me`
 - `workspaces list`
 - `projects list` / `project list`
 - `tasks list|get|subtasks|stories|comments|attachments`
 
-セキュリティ/UX 方針:
-- 設定ファイルは XDG Base Directory (`$XDG_CONFIG_HOME/asana-cli/credentials.json`) を優先
-- 設定ファイル権限は `0600` を維持
-- `clientSecret` は保存しない
-- 標準出力に token を出すときは `access_token` / `refresh_token` を redact
-- `auth login` は `http://127.0.0.1/...` または `http://localhost/...` の redirect URI のみ許可
+Security and UX policy:
+- Prefer the XDG Base Directory for the config file (`$XDG_CONFIG_HOME/asana-cli/credentials.json`)
+- Keep config file permissions at `0600`
+- Do not persist `clientSecret`
+- Redact `access_token` / `refresh_token` when printing tokens to stdout
+- `auth login` only accepts redirect URIs under `http://127.0.0.1/...` or `http://localhost/...`
 
-## インストール
+## Installation
 
 ### cargo install
 
@@ -28,23 +30,23 @@ Rust で書いた個人利用向け Asana OAuth CLI です。既存の `asana-oa
 cargo install --path .
 ```
 
-### リリースバイナリ
+### Release binaries
 
-GitHub Releases から以下を配布します。
+The following targets are distributed through GitHub Releases:
 - `x86_64-unknown-linux-gnu`
 - `x86_64-apple-darwin`
 - `aarch64-apple-darwin`
 
-Releases 一覧:
+Releases:
 - https://github.com/ktutumi/asana-cli/releases
 
-各 archive には対応する `.sha256` ファイルも添付されます。
+Each archive also includes a matching `.sha256` file.
 
-ファイル名の例:
+Example filenames:
 - `asana-cli-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz`
 - `asana-cli-vX.Y.Z-x86_64-unknown-linux-gnu.tar.gz.sha256`
 
-ダウンロード例:
+Download examples:
 
 Linux x86_64:
 ```bash
@@ -70,45 +72,45 @@ curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana
 shasum -a 256 -c asana-cli-${VERSION}-aarch64-apple-darwin.tar.gz.sha256
 ```
 
-macOS で "Apple はマルウェアが含まれていないことを検証できませんでした" と表示される場合:
+If macOS shows "Apple could not verify this app is free of malware":
 ```bash
 xattr -dr com.apple.quarantine ./asana-cli
 ./asana-cli --help
 ```
 
-別の回避方法:
-- Finder で `asana-cli` を右クリックして「開く」
-- もしくは「システム設定 → プライバシーとセキュリティ」から `このまま開く`
+Alternative workarounds:
+- Right-click `asana-cli` in Finder and choose Open
+- Or use System Settings → Privacy & Security → Open Anyway
 
-補足:
-- 現在の配布バイナリは notarization されていないため、macOS では Gatekeeper による確認ダイアログが出ることがあります。
-- 上記の `xattr` 解除は、ダウンロード済みバイナリをローカルで使うための回避策です。
+Notes:
+- The current distributed binaries are not notarized, so macOS may show a Gatekeeper warning dialog.
+- Removing the quarantine attribute with `xattr` is a local workaround for already-downloaded binaries.
 
-展開例:
+Extraction example:
 ```bash
 VERSION=v0.1.4
 tar -xzf asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
 ./asana-cli --help
 ```
 
-## Asana OAuth アプリ設定
+## Asana OAuth app setup
 
-Asana Developer Console で OAuth アプリを作成し、redirect URI を正確に登録してください。
+Create an OAuth app in the Asana Developer Console and register the redirect URI exactly.
 
-例:
+Examples:
 - `urn:ietf:wg:oauth:2.0:oob`
 - `http://127.0.0.1:18787/callback`
 
-注意:
-- `auth login` は localhost callback 専用です
-- OOB/manual copy-paste を使うときは `auth url` + `auth exchange` を使ってください
-- localhost callback で `:0` はテスト用です。本番運用では固定ポートを登録してください
+Notes:
+- `auth login` is only for the localhost callback flow
+- For the OOB/manual copy-paste flow, use `auth url` + `auth exchange`
+- `:0` on a localhost callback is only for testing. Register a fixed port for real use
 
-## 使い方
+## Usage
 
-### 出力形式を選ぶ
+### Choose an output format
 
-既定の出力形式は `json` です。人間向けに見やすくしたい場合は `--output table` または `--output compact` を指定します。
+The default output format is `json`. For more human-friendly output, use `--output table` or `--output compact`.
 
 ```bash
 asana-cli --output json workspaces list
@@ -116,12 +118,12 @@ asana-cli --output table workspaces list
 asana-cli --output compact tasks comments 789
 ```
 
-使い分け:
-- `json`: 後方互換性を優先した pretty JSON。`jq` などで処理しやすい
-- `table`: ヘッダ付きの TSV 風表示。人が一覧を眺めやすい
-- `compact`: ヘッダなしの簡潔表示。ターミナルで素早く確認したいとき向け
+When to use each format:
+- `json`: Pretty JSON with backward compatibility in mind. Easy to process with `jq` and similar tools
+- `table`: TSV-like output with headers. Easier for humans to scan in a list
+- `compact`: Concise output without headers. Good for quick terminal checks
 
-### 認可 URL を出す
+### Print an authorization URL
 
 ```bash
 asana-cli auth url \
@@ -129,7 +131,7 @@ asana-cli auth url \
   --state demo-state
 ```
 
-### manual flow で code を交換する
+### Exchange a code in the manual flow
 
 ```bash
 asana-cli auth exchange \
@@ -139,7 +141,7 @@ asana-cli auth exchange \
   --code "$ASANA_CODE"
 ```
 
-### localhost callback で自動ログインする
+### Complete automatic login via localhost callback
 
 ```bash
 asana-cli auth login \
@@ -148,7 +150,7 @@ asana-cli auth login \
   --redirect-uri http://127.0.0.1:18787/callback
 ```
 
-ブラウザを自動起動したくない場合:
+If you do not want the browser to open automatically:
 
 ```bash
 asana-cli auth login \
@@ -158,33 +160,33 @@ asana-cli auth login \
   --redirect-uri http://127.0.0.1:18787/callback
 ```
 
-期待される挙動:
-1. CLI が `Open this URL in your browser: ...` を出力
-2. 可能ならブラウザを自動起動し、失敗時は URL を手動で開くよう案内
-3. localhost callback が `code` と `state` を受信
-4. token を交換して設定ファイルへ保存
-5. 保存先 config path と実際に使った redirect URI を案内
+Expected behavior:
+1. The CLI prints `Open this URL in your browser: ...`
+2. It tries to open the browser automatically if possible, and otherwise tells you to open the URL manually
+3. The localhost callback receives `code` and `state`
+4. The CLI exchanges the token and saves it to the config file
+5. It reports the config path and the actual redirect URI that was used
 
-### 保存済み認証情報の状態を確認する
+### Check saved credential status
 
 ```bash
 asana-cli auth status
 ```
 
-表示内容:
+Displayed information:
 - config path
-- config file の有無
+- whether the config file exists
 - `clientId` / `redirectUri`
-- access token / refresh token の有無（値そのものは redact）
+- whether an access token / refresh token exists (the values themselves are redacted)
 - `expires_at`
 
-### token を refresh する
+### Refresh a token
 
 ```bash
 asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 ```
 
-### API を読む
+### Read the API
 
 ```bash
 asana-cli me
@@ -207,21 +209,21 @@ asana-cli tasks comments 789
 asana-cli tasks attachments 789
 ```
 
-補足:
-- `tasks stories` は task の story 履歴全体を返しますが、Asana API の compact record が中心です。
-- `tasks comments` は `comment_added` の story だけを抽出し、本文表示に必要な `text` / `html_text` / `created_at` / `created_by.name` を含めて返します。
-- コメント本文を確認したい場合は `tasks comments` を使ってください。
+Notes:
+- `tasks stories` returns the full story history for a task, but it is centered on Asana API compact records.
+- `tasks comments` extracts only `comment_added` stories and includes `text` / `html_text` / `created_at` / `created_by.name`, which are needed to display the comment body.
+- If you need the actual comment text, prefer `tasks comments`.
 
-## 設定ファイル
+## Config file
 
-既定パス:
+Default paths:
 
 ```text
 $XDG_CONFIG_HOME/asana-cli/credentials.json
 ~/.config/asana-cli/credentials.json
 ```
 
-保存される内容:
+Persisted fields:
 - `clientId`
 - `redirectUri`
 - `token.access_token`
@@ -230,21 +232,21 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 - `token.expires_in`
 - `token.expires_at`
 
-保存しない内容:
+Not persisted:
 - `clientSecret`
 
 ## Skills
 
-AI Agent からこの CLI を扱うための Skill は `skills/` に置いています。
+Skills for AI agents operating this CLI live under `skills/`.
 
-現在含まれるもの:
+Currently included:
 - `skills/asana-cli-operator/`
-  - `asana-cli` の運用 Skill。認証状態確認、workspace / project / task / comment / attachment の取得、token refresh、出力形式の使い分けを定義しています。
-  - 本体: `skills/asana-cli-operator/SKILL.md`
+  - An operational skill for `asana-cli`. It defines how to check authentication status, fetch workspaces / projects / tasks / comments / attachments, refresh tokens, and choose output formats.
+  - Main file: `skills/asana-cli-operator/SKILL.md`
 
-詳細は `skills/README.md` を参照してください。
+See `skills/README.md` for details.
 
-## 開発
+## Development
 
 ```bash
 cargo fmt --all
@@ -256,10 +258,10 @@ cargo clippy --all-targets --all-features -- -D warnings
 ## GitHub Actions
 
 - `ci.yml`: fmt / check / test / clippy
-- `release.yml`: タグ push で macOS / Linux バイナリをビルドして release asset を作成
+- `release.yml`: builds macOS / Linux binaries and creates release assets when a tag is pushed
 
-## 開発フロー
+## Development flow
 
-- `main` は protected branch として扱い、直接 push しない
-- 変更は feature branch で行い、Pull Request 経由で `main` に取り込む
-- 可能なら squash merge を使い、不要になった branch は削除する
+- Treat `main` as a protected branch and do not push to it directly
+- Make changes on a feature branch and merge into `main` through a Pull Request
+- Prefer squash merges when possible, and delete branches that are no longer needed
