@@ -2,7 +2,7 @@
 
 言語: [English](README.md) | 日本語
 
-Rust で書いた個人利用向け Asana OAuth CLI です。既存の `asana-oauth-cli` の主要機能を Rust に移植し、GitHub Releases から macOS / Linux 向けバイナリを配布できる前提で構成しています。
+Rust で書いた個人利用向け Asana OAuth CLI です。GitHub Releases から macOS / Linux 向けバイナリを配布できる前提で構成しています。
 
 主な機能:
 - `auth url` で認可 URL を生成
