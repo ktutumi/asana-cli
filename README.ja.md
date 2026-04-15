@@ -50,7 +50,7 @@ Releases 一覧:
 
 Linux x86_64:
 ```bash
-VERSION=v0.1.4
+VERSION=v0.1.6
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256
@@ -58,7 +58,7 @@ shasum -a 256 -c asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 macOS Intel:
 ```bash
-VERSION=v0.1.4
+VERSION=v0.1.6
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-x86_64-apple-darwin.tar.gz
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-x86_64-apple-darwin.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-x86_64-apple-darwin.tar.gz.sha256
@@ -66,7 +66,7 @@ shasum -a 256 -c asana-cli-${VERSION}-x86_64-apple-darwin.tar.gz.sha256
 
 macOS Apple Silicon:
 ```bash
-VERSION=v0.1.4
+VERSION=v0.1.6
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-aarch64-apple-darwin.tar.gz
 curl -LO https://github.com/ktutumi/asana-cli/releases/download/${VERSION}/asana-cli-${VERSION}-aarch64-apple-darwin.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-aarch64-apple-darwin.tar.gz.sha256
@@ -88,7 +88,7 @@ xattr -dr com.apple.quarantine ./asana-cli
 
 展開例:
 ```bash
-VERSION=v0.1.4
+VERSION=v0.1.6
 tar -xzf asana-cli-${VERSION}-x86_64-unknown-linux-gnu.tar.gz
 ./asana-cli --help
 ```
