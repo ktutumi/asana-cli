@@ -6,6 +6,7 @@ Rust で書いた個人利用向け Asana OAuth CLI です。既存の `asana-oa
 - `auth url` で認可 URL を生成
 - `auth exchange` で authorization code を token に交換
 - `auth login` で localhost callback による自動ログイン
+- `auth status` で保存済み認証情報の状態を確認
 - `auth refresh` で refresh token を使って access token を更新
 - `me`
 - `workspaces list`
@@ -132,11 +133,35 @@ asana-cli auth login \
   --redirect-uri http://127.0.0.1:18787/callback
 ```
 
+ブラウザを自動起動したくない場合:
+
+```bash
+asana-cli auth login \
+  --no-open \
+  --client-id "$ASANA_CLIENT_ID" \
+  --client-secret "$ASANA_CLIENT_SECRET" \
+  --redirect-uri http://127.0.0.1:18787/callback
+```
+
 期待される挙動:
 1. CLI が `Open this URL in your browser: ...` を出力
-2. ブラウザで Asana 認可画面を開く
+2. 可能ならブラウザを自動起動し、失敗時は URL を手動で開くよう案内
 3. localhost callback が `code` と `state` を受信
 4. token を交換して設定ファイルへ保存
+5. 保存先 config path と実際に使った redirect URI を案内
+
+### 保存済み認証情報の状態を確認する
+
+```bash
+asana-cli auth status
+```
+
+表示内容:
+- config path
+- config file の有無
+- `clientId` / `redirectUri`
+- access token / refresh token の有無（値そのものは redact）
+- `expires_at`
 
 ### token を refresh する
 
@@ -149,13 +174,16 @@ asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 ```bash
 asana-cli me
 asana-cli workspaces list
-asana-cli projects list --workspace 123
-asana-cli tasks list --project 456
-asana-cli tasks get --task 789
-asana-cli tasks subtasks --task 789
-asana-cli tasks stories --task 789
-asana-cli tasks comments --task 789
-asana-cli tasks attachments --task 789
+asana-cli workspaces ls
+asana-cli projects list 123
+asana-cli projects ls --workspace 123
+asana-cli tasks list 456
+asana-cli tasks ls --project 456
+asana-cli tasks get 789
+asana-cli tasks subtasks 789
+asana-cli tasks stories 789
+asana-cli tasks comments 789
+asana-cli tasks attachments 789
 ```
 
 補足:
@@ -197,3 +225,9 @@ cargo clippy --all-targets --all-features -- -D warnings
 
 - `ci.yml`: fmt / check / test / clippy
 - `release.yml`: タグ push で macOS / Linux バイナリをビルドして release asset を作成
+
+## 開発フロー
+
+- `main` は protected branch として扱い、直接 push しない
+- 変更は feature branch で行い、Pull Request 経由で `main` に取り込む
+- 可能なら squash merge を使い、不要になった branch は削除する
