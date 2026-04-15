@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
 jobs:
   build:
     strategy:
@@ -32,15 +35,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: cargo build
         run: cargo build --release --target ${{ matrix.target }}
-      - name: package binary
+      - name: package binary and checksum
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           cp README.md dist/
           cp target/${{ matrix.target }}/release/asana-cli dist/
-          tar -C dist -czf asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz README.md asana-cli
+          archive="asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz"
+          tar -C dist -czf "$archive" README.md asana-cli
+          shasum -a 256 "$archive" > "$archive.sha256"
       - name: upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          files: |
+            asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+            asana-cli-${{ github.ref_name }}-${{ matrix.target }}.tar.gz.sha256
