@@ -106,6 +106,21 @@ Asana Developer Console で OAuth アプリを作成し、redirect URI を正確
 
 ## 使い方
 
+### 出力形式を選ぶ
+
+既定の出力形式は `json` です。人間向けに見やすくしたい場合は `--output table` または `--output compact` を指定します。
+
+```bash
+asana-cli --output json workspaces list
+asana-cli --output table workspaces list
+asana-cli --output compact tasks comments 789
+```
+
+使い分け:
+- `json`: 後方互換性を優先した pretty JSON。`jq` などで処理しやすい
+- `table`: ヘッダ付きの TSV 風表示。人が一覧を眺めやすい
+- `compact`: ヘッダなしの簡潔表示。ターミナルで素早く確認したいとき向け
+
 ### 認可 URL を出す
 
 ```bash
@@ -173,15 +188,21 @@ asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 
 ```bash
 asana-cli me
+asana-cli --output table me
 asana-cli workspaces list
+asana-cli --output table workspaces list
 asana-cli workspaces ls
 asana-cli projects list 123
+asana-cli --output table projects list 123
 asana-cli projects ls --workspace 123
 asana-cli tasks list 456
+asana-cli --output table tasks list 456
 asana-cli tasks ls --project 456
 asana-cli tasks get 789
+asana-cli --output compact tasks get 789
 asana-cli tasks subtasks 789
 asana-cli tasks stories 789
+asana-cli --output table tasks comments 789
 asana-cli tasks comments 789
 asana-cli tasks attachments 789
 ```
