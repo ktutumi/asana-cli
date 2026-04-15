@@ -117,6 +117,266 @@ async fn auth_status_reports_missing_config_cleanly() {
 }
 
 #[tokio::test]
+async fn output_json_preserves_pretty_json_for_workspaces_list() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/workspaces"))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"w1","name":"Personal","resource_type":"workspace"}]}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "json",
+            "workspaces",
+            "list",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let output = io.stdout_lines().join("\n");
+    assert!(output.contains("\"gid\": \"w1\""));
+    assert!(output.contains("\"name\": \"Personal\""));
+    assert!(output.starts_with("[\n  {"));
+}
+
+#[tokio::test]
+async fn output_table_formats_workspace_rows_for_humans() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/workspaces"))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"w1","name":"Personal","resource_type":"workspace"}]}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "table",
+            "workspaces",
+            "list",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let output = io.stdout_lines().join("\n");
+    assert!(output.contains("gid\tname\tresource_type"));
+    assert!(output.contains("w1\tPersonal\tworkspace"));
+    assert!(!output.contains("\"gid\""));
+}
+
+#[tokio::test]
+async fn output_compact_emits_headerless_workspace_rows() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/workspaces"))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"w1","name":"Personal","resource_type":"workspace"}]}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "compact",
+            "workspaces",
+            "list",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let lines = io.stdout_lines();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0], "w1\tPersonal\tworkspace");
+}
+
+#[tokio::test]
+async fn output_table_formats_task_comments_with_selected_columns() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/tasks/task-1/stories"))
+        .and(query_param(
+            "opt_fields",
+            "gid,resource_subtype,resource_type,text,html_text,created_at,created_by.name",
+        ))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"story-1","resource_subtype":"comment_added","resource_type":"story","text":"Looks good","created_at":"2026-04-15T06:00:00Z","created_by":{"name":"Alice"}}],"next_page":null}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "table",
+            "tasks",
+            "comments",
+            "task-1",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let output = io.stdout_lines().join("\n");
+    assert!(output.contains("gid\tcreated_at\tcreated_by.name\ttext"));
+    assert!(output.contains("story-1\t2026-04-15T06:00:00Z\tAlice\tLooks good"));
+}
+
+#[tokio::test]
+async fn output_table_escapes_tabs_and_newlines_in_values() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/tasks/task-1/stories"))
+        .and(query_param(
+            "opt_fields",
+            "gid,resource_subtype,resource_type,text,html_text,created_at,created_by.name",
+        ))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"story-1","resource_subtype":"comment_added","resource_type":"story","text":"Looks\n good\tTabbed","created_at":"2026-04-15T06:00:00Z","created_by":{"name":"Alice\nBob"}}],"next_page":null}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "table",
+            "tasks",
+            "comments",
+            "task-1",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let lines = io.stdout_lines();
+    assert_eq!(lines.len(), 2);
+    assert!(lines[1].contains("Alice\\nBob"));
+    assert!(lines[1].contains("Looks\\n good\\tTabbed"));
+}
+
+#[tokio::test]
+async fn output_table_for_attachments_uses_available_columns_only() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/1.0/tasks/task-1/attachments"))
+        .and(header("authorization", "Bearer access-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            r#"{"data":[{"gid":"att-1","name":"spec.pdf","resource_type":"attachment"}],"next_page":null}"#,
+            "application/json",
+        ))
+        .mount(&server)
+        .await;
+
+    let temp = tempdir().expect("tempdir");
+    let config_path = write_config(temp.path().join("credentials.json"));
+    let io = BufferedCliIo::default();
+
+    let exit_code = run_cli_catching(
+        &[
+            "--config",
+            config_path.to_str().expect("config path"),
+            "--output",
+            "table",
+            "tasks",
+            "attachments",
+            "task-1",
+        ],
+        &io,
+        RuntimeOptions {
+            api_base: Some(format!("{}/api/1.0/", server.uri())),
+            oauth_token_endpoint: Some(format!("{}/-/oauth_token", server.uri())),
+            browser: None,
+        },
+    )
+    .await;
+
+    assert_eq!(exit_code, 0);
+    let lines = io.stdout_lines();
+    assert_eq!(lines[0], "gid\tname\tresource_type");
+    assert_eq!(lines[1], "att-1\tspec.pdf\tattachment");
+}
+
+#[tokio::test]
 async fn completes_auth_login_through_localhost_callback_and_saves_the_token() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

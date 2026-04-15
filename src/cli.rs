@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
-use clap::{ArgAction, Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+use serde_json::Value;
 
 use crate::asana_api::{AsanaClient, OAuthExchangeInput, OAuthRefreshInput};
 use crate::config::{StoredConfigPatch, TokenData, default_config_path, load_config, save_config};
@@ -33,6 +34,27 @@ impl RuntimeOptions {
             browser: std::env::var("BROWSER").ok(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Default, ValueEnum, PartialEq, Eq)]
+enum OutputFormat {
+    #[default]
+    Json,
+    Table,
+    Compact,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RenderProfile {
+    Workspaces,
+    Projects,
+    Tasks,
+    TaskDetails,
+    Subtasks,
+    Stories,
+    Comments,
+    Attachments,
+    Me,
 }
 
 pub trait CliIo: Send + Sync {
@@ -94,6 +116,14 @@ struct Cli {
         help = "認証情報を保存する設定ファイルのパス"
     )]
     config: PathBuf,
+    #[arg(
+        long,
+        global = true,
+        value_enum,
+        default_value_t = OutputFormat::Json,
+        help = "出力形式 (json, table, compact)"
+    )]
+    output: OutputFormat,
     #[command(subcommand)]
     command: Commands,
 }
@@ -333,9 +363,12 @@ pub async fn run_cli<S: AsRef<str>>(
         Commands::Auth(auth) => handle_auth(auth, &cli.config, io, &api_client, &runtime).await,
         Commands::Me => {
             let access_token = require_access_token(&cli.config).await?;
-            io.stdout(serde_json::to_string_pretty(
+            render_object_output(
+                io,
+                cli.output,
+                RenderProfile::Me,
                 &api_client.fetch_me(&access_token).await?,
-            )?);
+            )?;
             Ok(())
         }
         Commands::Projects(projects) => match projects.command {
@@ -346,7 +379,7 @@ pub async fn run_cli<S: AsRef<str>>(
                 let workspace = required_value("workspace", workspace_arg, workspace)?;
                 let access_token = require_access_token(&cli.config).await?;
                 let items = api_client.list_projects(&access_token, &workspace).await?;
-                io.stdout(serde_json::to_string_pretty(&items)?);
+                render_collection_output(io, cli.output, RenderProfile::Projects, &items)?;
                 Ok(())
             }
         },
@@ -358,39 +391,33 @@ pub async fn run_cli<S: AsRef<str>>(
                     project,
                 } => {
                     let project = required_value("project", project_arg, project)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.list_tasks(&access_token, &project).await?,
-                    )?)
+                    let items = api_client.list_tasks(&access_token, &project).await?;
+                    render_collection_output(io, cli.output, RenderProfile::Tasks, &items)?;
                 }
                 TaskSubcommand::Get { task_arg, task } => {
                     let task = required_value("task", task_arg, task)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.get_task(&access_token, &task).await?,
-                    )?)
+                    let item = api_client.get_task(&access_token, &task).await?;
+                    render_object_output(io, cli.output, RenderProfile::TaskDetails, &item)?;
                 }
                 TaskSubcommand::Subtasks { task_arg, task } => {
                     let task = required_value("task", task_arg, task)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.list_subtasks(&access_token, &task).await?,
-                    )?)
+                    let items = api_client.list_subtasks(&access_token, &task).await?;
+                    render_collection_output(io, cli.output, RenderProfile::Subtasks, &items)?;
                 }
                 TaskSubcommand::Stories { task_arg, task } => {
                     let task = required_value("task", task_arg, task)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.list_stories(&access_token, &task).await?,
-                    )?)
+                    let items = api_client.list_stories(&access_token, &task).await?;
+                    render_collection_output(io, cli.output, RenderProfile::Stories, &items)?;
                 }
                 TaskSubcommand::Comments { task_arg, task } => {
                     let task = required_value("task", task_arg, task)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.list_comments(&access_token, &task).await?,
-                    )?)
+                    let items = api_client.list_comments(&access_token, &task).await?;
+                    render_collection_output(io, cli.output, RenderProfile::Comments, &items)?;
                 }
                 TaskSubcommand::Attachments { task_arg, task } => {
                     let task = required_value("task", task_arg, task)?;
-                    io.stdout(serde_json::to_string_pretty(
-                        &api_client.list_attachments(&access_token, &task).await?,
-                    )?)
+                    let items = api_client.list_attachments(&access_token, &task).await?;
+                    render_collection_output(io, cli.output, RenderProfile::Attachments, &items)?;
                 }
             }
             Ok(())
@@ -398,13 +425,108 @@ pub async fn run_cli<S: AsRef<str>>(
         Commands::Workspaces(workspaces) => match workspaces.command {
             WorkspaceSubcommand::List => {
                 let access_token = require_access_token(&cli.config).await?;
-                io.stdout(serde_json::to_string_pretty(
-                    &api_client.list_workspaces(&access_token).await?,
-                )?);
+                let items = api_client.list_workspaces(&access_token).await?;
+                render_collection_output(io, cli.output, RenderProfile::Workspaces, &items)?;
                 Ok(())
             }
         },
     }
+}
+
+fn render_collection_output(
+    io: &dyn CliIo,
+    format: OutputFormat,
+    profile: RenderProfile,
+    items: &[Value],
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => {
+            io.stdout(serde_json::to_string_pretty(items)?);
+        }
+        OutputFormat::Table | OutputFormat::Compact => {
+            let columns = columns_for_profile(profile);
+            if format == OutputFormat::Table {
+                io.stdout(columns.join("\t"));
+            }
+            for item in items {
+                io.stdout(render_row(item, columns));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn render_object_output(
+    io: &dyn CliIo,
+    format: OutputFormat,
+    profile: RenderProfile,
+    item: &Value,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => io.stdout(serde_json::to_string_pretty(item)?),
+        OutputFormat::Table => {
+            io.stdout("field\tvalue".to_string());
+            for field in columns_for_profile(profile) {
+                io.stdout(format!("{field}\t{}", value_for_column(item, field)));
+            }
+        }
+        OutputFormat::Compact => {
+            for field in columns_for_profile(profile) {
+                io.stdout(format!("{field}={}", value_for_column(item, field)));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn columns_for_profile(profile: RenderProfile) -> &'static [&'static str] {
+    match profile {
+        RenderProfile::Workspaces => &["gid", "name", "resource_type"],
+        RenderProfile::Projects => &["gid", "name", "resource_type"],
+        RenderProfile::Tasks => &["gid", "name", "resource_type", "resource_subtype"],
+        RenderProfile::TaskDetails => &["gid", "name", "resource_type", "resource_subtype"],
+        RenderProfile::Subtasks => &["gid", "name", "resource_type", "resource_subtype"],
+        RenderProfile::Stories => &["gid", "resource_subtype", "resource_type", "text"],
+        RenderProfile::Comments => &["gid", "created_at", "created_by.name", "text"],
+        RenderProfile::Attachments => &["gid", "name", "resource_type"],
+        RenderProfile::Me => &["gid", "name", "resource_type"],
+    }
+}
+
+fn render_row(item: &Value, columns: &[&str]) -> String {
+    columns
+        .iter()
+        .map(|column| value_for_column(item, column))
+        .collect::<Vec<_>>()
+        .join("\t")
+}
+
+fn value_for_column(item: &Value, column: &str) -> String {
+    let mut current = item;
+    for segment in column.split('.') {
+        let Some(next) = current.get(segment) else {
+            return String::new();
+        };
+        current = next;
+    }
+
+    match current {
+        Value::Null => String::new(),
+        Value::String(value) => sanitize_output_value(value),
+        Value::Bool(value) => value.to_string(),
+        Value::Number(value) => value.to_string(),
+        Value::Array(_) | Value::Object(_) => {
+            sanitize_output_value(&serde_json::to_string(current).unwrap_or_default())
+        }
+    }
+}
+
+fn sanitize_output_value(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('\t', "\\t")
+        .replace('\r', "\\r")
+        .replace('\n', "\\n")
 }
 
 async fn handle_auth(
