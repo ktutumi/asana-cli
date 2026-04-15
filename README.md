@@ -30,9 +30,9 @@ Security and UX policy:
 cargo install --path .
 ```
 
-### Release binaries
+### Prebuilt binaries
 
-The following targets are distributed through GitHub Releases:
+Prebuilt binaries are available for the following targets:
 - `x86_64-unknown-linux-gnu`
 - `x86_64-apple-darwin`
 - `aarch64-apple-darwin`
@@ -164,16 +164,16 @@ Expected behavior:
 1. The CLI prints `Open this URL in your browser: ...`
 2. It tries to open the browser automatically if possible, and otherwise tells you to open the URL manually
 3. The localhost callback receives `code` and `state`
-4. The CLI exchanges the token and saves it to the config file
+4. The CLI exchanges the code for tokens and saves them to the config file
 5. It reports the config path and the actual redirect URI that was used
 
-### Check saved credential status
+### Check saved credentials
 
 ```bash
 asana-cli auth status
 ```
 
-Displayed information:
+This command shows:
 - config path
 - whether the config file exists
 - `clientId` / `redirectUri`
@@ -186,7 +186,7 @@ Displayed information:
 asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 ```
 
-### Read the API
+### Query the API
 
 ```bash
 asana-cli me
