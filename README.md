@@ -35,40 +35,54 @@ GitHub Releases から以下を配布します。
 - `aarch64-apple-darwin`
 
 最新 release:
-- `v0.1.1`: https://github.com/ktutumi/asana-cli/releases/tag/v0.1.1
+- `v0.1.2`: https://github.com/ktutumi/asana-cli/releases/tag/v0.1.2
 
 各 archive には対応する `.sha256` ファイルも添付されます。
 
 例:
-- `asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz`
-- `asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256`
+- `asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz`
+- `asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256`
 
 ダウンロード例:
 
 Linux x86_64:
 ```bash
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
-shasum -a 256 -c asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz.sha256
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
+shasum -a 256 -c asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz.sha256
 ```
 
 macOS Intel:
 ```bash
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-x86_64-apple-darwin.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-x86_64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c asana-cli-v0.1.1-x86_64-apple-darwin.tar.gz.sha256
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-x86_64-apple-darwin.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-x86_64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c asana-cli-v0.1.2-x86_64-apple-darwin.tar.gz.sha256
 ```
 
 macOS Apple Silicon:
 ```bash
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-aarch64-apple-darwin.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.1/asana-cli-v0.1.1-aarch64-apple-darwin.tar.gz.sha256
-shasum -a 256 -c asana-cli-v0.1.1-aarch64-apple-darwin.tar.gz.sha256
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-aarch64-apple-darwin.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v0.1.2/asana-cli-v0.1.2-aarch64-apple-darwin.tar.gz.sha256
+shasum -a 256 -c asana-cli-v0.1.2-aarch64-apple-darwin.tar.gz.sha256
 ```
+
+macOS で "Apple はマルウェアが含まれていないことを検証できませんでした" と表示される場合:
+```bash
+xattr -dr com.apple.quarantine ./asana-cli
+./asana-cli --help
+```
+
+別の回避方法:
+- Finder で `asana-cli` を右クリックして「開く」
+- もしくは「システム設定 → プライバシーとセキュリティ」から `このまま開く`
+
+補足:
+- 現在の配布バイナリは notarization されていないため、macOS では Gatekeeper による確認ダイアログが出ることがあります。
+- 上記の `xattr` 解除は、ダウンロード済みバイナリをローカルで使うための回避策です。
 
 展開例:
 ```bash
-tar -xzf asana-cli-v0.1.1-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf asana-cli-v0.1.2-x86_64-unknown-linux-gnu.tar.gz
 ./asana-cli --help
 ```
 
