@@ -233,6 +233,17 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 保存しない内容:
 - `clientSecret`
 
+## Skills
+
+AI Agent からこの CLI を扱うための Skill は `skills/` に置いています。
+
+現在含まれるもの:
+- `skills/asana-cli-operator/`
+  - `asana-cli` の運用 Skill。認証状態確認、workspace / project / task / comment / attachment の取得、token refresh、出力形式の使い分けを定義しています。
+  - 本体: `skills/asana-cli-operator/SKILL.md`
+
+詳細は `skills/README.md` を参照してください。
+
 ## 開発
 
 ```bash
