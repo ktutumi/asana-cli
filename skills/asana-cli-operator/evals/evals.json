@@ -1,0 +1,23 @@
+{
+  "skill_name": "asana-cli-operator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use `asana-cli` to check the current authentication state and tell me what I should do next. Run the real command if needed.",
+      "expected_output": "Starts with `auth status`, then recommends the next step based on config path and token presence. If authenticated, it suggests likely next commands. If unauthenticated, it points to login or the manual flow.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "I only want the comment text for Asana task 120000000000999. Check how to do it with `asana-cli` and tell me which command should be used.",
+      "expected_output": "Chooses `tasks comments` instead of `tasks stories` and, if helpful, explains when to use table versus json output.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "In this repository checkout, inspect the current `asana-cli` implementation's `auth login --help` UX and summarize the key points. Use the current source tree, not an installed binary.",
+      "expected_output": "Uses `cargo run -- auth login --help` inside the repo to validate the current source tree and summarizes the localhost redirect restriction and examples.",
+      "files": []
+    }
+  ]
+}
