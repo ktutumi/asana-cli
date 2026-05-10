@@ -1,0 +1,20 @@
+# Lefthook configuration for asana-cli-go
+# See https://github.com/evilmartians/lefthook for details
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      run: test -z "$(gofmt -l .)" || (echo "gofmt check failed. Run 'gofmt -w .' to fix." && exit 1)
+    go-vet:
+      glob: "*.go"
+      run: go vet ./...
+    go-test:
+      glob: "*.go"
+      run: go test ./...
+
+commit-msg:
+  commands:
+    lint-commit-msg:
+      run: test "$(cat {1} | head -c 1)" != "#" || (echo "Commit message cannot start with '#'" && exit 1)

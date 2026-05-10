@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-- Project: `github.com/ktutumi/asana-cli-go`
+- Project: `github.com/ktutumi/asana-cli
 - Product: Asana OAuth CLI written in Go.
 - Goal: Terminal-first CLI for Asana OAuth authentication and read-only Asana API access.
 - Main binary: `cmd/asana-cli/main.go`
