@@ -310,6 +310,53 @@ func TestHelpForAuthSubcommandDoesNotRequireSecret(t *testing.T) {
 	}
 }
 
+func TestSectionsListMakesRequestAndRenders(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj-1/sections" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer at" {
+			t.Fatalf("auth=%s", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"data":[{"gid":"s1","name":"To Do"},{"gid":"s2","name":"Done"}]}`))
+	}))
+	t.Cleanup(api.Close)
+
+	opts := cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: api.URL + "/", Output: "json"}
+	outBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"sections", "list", "proj-1"}, &cli.CliIO{Out: outBuf, ErrOut: &bytes.Buffer{}}, opts)
+	if code != 0 {
+		t.Fatalf("want 0 got %d", code)
+	}
+	if !strings.Contains(outBuf.String(), "s1") || !strings.Contains(outBuf.String(), "To Do") {
+		t.Fatalf("output=%s", outBuf.String())
+	}
+}
+
+func TestSectionsListRequiresProject(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	t.Cleanup(api.Close)
+
+	opts := cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: api.URL + "/"}
+	errBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"sections", "list"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errBuf}, opts)
+	if code != 1 {
+		t.Fatalf("want 1 got %d", code)
+	}
+	if !strings.Contains(errBuf.String(), "project gid is required") {
+		t.Fatalf("err=%s", errBuf.String())
+	}
+}
+
+func TestSectionsListDuplicateTarget(t *testing.T) {
+	opts := cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t)}
+	ioOut := &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}
+	code := cli.RunCLI([]string{"sections", "list", "proj-1", "--project", "proj-2"}, ioOut, opts)
+	if code != 1 {
+		t.Fatalf("want 1 got %d", code)
+	}
+}
+
 func writeConfig(t *testing.T, path string, cfg config.StoredConfig) {
 	t.Helper()
 	b, err := json.Marshal(cfg)

@@ -130,6 +130,9 @@ func (c *Client) ListProjects(_ context.Context, token string, q url.Values) ([]
 func (c *Client) ListTasks(_ context.Context, token string, q url.Values) ([]Object, error) {
 	return c.getList(token, "tasks", q)
 }
+func (c *Client) ListSections(_ context.Context, token, projectGid string) ([]Object, error) {
+	return c.getList(token, "projects/"+url.PathEscape(projectGid)+"/sections", nil)
+}
 func (c *Client) GetTask(_ context.Context, token, gid string) (Object, error) {
 	var out Object
 	return out, c.getOne(token, "tasks/"+url.PathEscape(gid), nil, &out)

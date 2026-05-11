@@ -234,6 +234,8 @@ func dispatch(args []string, io *CliIO, rt RuntimeOptions) error {
 		return apiCmd("projects", args[1:], io, rt)
 	case "tasks":
 		return apiCmd("tasks", args[1:], io, rt)
+	case "sections":
+		return apiCmd("sections", args[1:], io, rt)
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
@@ -479,6 +481,23 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 			return err
 		}
 		return render(io.out(), rt.Output, "tasks", v)
+	case "sections:list":
+		p, err := parseFlags(args, []string{"project"}, nil, nil, 1)
+		if err != nil {
+			return err
+		}
+		pr, err := target(p, "project")
+		if err != nil {
+			return err
+		}
+		if pr == "" {
+			return fmt.Errorf("project gid is required")
+		}
+		v, err := c.ListSections(context.Background(), tok, pr)
+		if err != nil {
+			return err
+		}
+		return render(io.out(), rt.Output, "sections", v)
 	case "tasks:get", "tasks:subtasks", "tasks:stories", "tasks:comments", "tasks:attachments":
 		p, err := parseFlags(args, []string{"task"}, nil, nil, 1)
 		if err != nil {
@@ -580,7 +599,7 @@ func openURL(rt RuntimeOptions, u string) error {
 	}
 }
 
-var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
+var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "sections": {"gid", "name"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
 
 func render(w io.Writer, format, typ string, data any) error {
 	if format == "json" {
@@ -697,8 +716,8 @@ func guessCols(d any) []string {
 func rootHelp() string {
 	return `asana-cli - Asana OAuth and read-only API CLI
 
-Primary commands:
-  auth, me, workspaces, projects, tasks
+  Primary commands:
+  auth, me, workspaces, projects, sections, tasks
 
 Usage:
   asana-cli [--config PATH] [--output json|table|compact] <command>
@@ -708,6 +727,7 @@ Commands:
   me          Show current user
   workspaces  List workspaces
   projects    List projects
+  sections    List sections in a project
   tasks       List and inspect tasks
 
 Global flags:

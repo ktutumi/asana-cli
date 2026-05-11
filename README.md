@@ -13,6 +13,7 @@ Key features:
 - `me`
 - `workspaces list`
 - `projects list` / `project list`
+- `sections list`
 - `tasks list|get|subtasks|stories|comments|attachments`
 
 Security and UX policy:
@@ -204,6 +205,8 @@ asana-cli projects ls --workspace 123
 asana-cli tasks list 456
 asana-cli --output table tasks list 456
 asana-cli tasks ls --project 456
+asana-cli sections list 456
+asana-cli --output table sections list 456
 asana-cli tasks get 789
 asana-cli --output compact tasks get 789
 asana-cli tasks subtasks 789

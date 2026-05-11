@@ -305,6 +305,31 @@ func TestFetchMe(t *testing.T) {
 	}
 }
 
+func TestListSections(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/projects/proj-1/sections" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"gid":"s1","name":"To Do"},{"gid":"s2","name":"Done"}]}`))
+	}))
+	defer ts.Close()
+
+	c := asana.NewClient(ts.URL+"/", "")
+	got, err := c.ListSections(context.Background(), "token", "proj-1")
+	if err != nil {
+		t.Fatalf("list sections: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d", len(got))
+	}
+	if got[0]["gid"] != "s1" || got[0]["name"] != "To Do" {
+		t.Fatalf("got[0]=%#v", got[0])
+	}
+	if got[1]["gid"] != "s2" || got[1]["name"] != "Done" {
+		t.Fatalf("got[1]=%#v", got[1])
+	}
+}
+
 func readBody(t *testing.T, r *http.Request) string {
 	t.Helper()
 	b, _ := io.ReadAll(r.Body)
