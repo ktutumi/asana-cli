@@ -60,9 +60,12 @@ go test ./...
 
 - Parses global flags before the command: `--config`, `--output`, `--help`, `--version`.
 - Builds default runtime endpoints when env overrides are absent.
-- Routes commands to `handleAuth`, `handleProjects`, `handleTasks`, `handleWorkspaces`, or `me`.
+- Routes commands to `handleAuth`, `handleProjects`, `handleTasks`, `handleWorkspaces`, `handleSections`, or `me`.
 - Uses `CliIO` to make stdout/stderr assertions easy in tests.
 - Renders output as `json`, `table`, or `compact`.
+- `tasks` subcommands: `list`, `get`, `subtasks`, `stories`, `comments`, `attachments`.
+  - `stories` returns full story history with compact records.
+  - `comments` extracts only `comment_added` stories and includes `text`/`html_text`/`created_at`/`created_by.name`.
 
 ### Asana API client
 
@@ -130,3 +133,11 @@ When adding or changing commands:
 - [ ] Update help text in `internal/cli/cli.go`.
 - [ ] Add tests for new help/error behavior.
 - [ ] Mention any new environment variable in README.
+
+## Session Tips
+
+- Press `#` during a session to auto-incorporate learnings into this file.
+- Lessons from corrections go into `tasks/lessons.md`.
+- Work plans for multi-step tasks go into `.sisyphus/plans/*.md`.
+- In-repo skill: `.claude/skills/asana-cli-go-development/SKILL.md`
+- Subagent definitions: `.claude/agents/`
