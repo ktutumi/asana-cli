@@ -249,6 +249,11 @@ Override the path with `--config /path/to/credentials.json`.
 - `ASANA_API_BASE`: override the Asana API base URL
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: override the OAuth token endpoint
 - `BROWSER`: browser command used by `auth login`
+- `ASANA_CLIENT_SECRET`: enables automatic token refresh before API calls when the saved access token is expired or near expiration. The value is never persisted.
+
+### Automatic token refresh
+
+If `ASANA_CLIENT_SECRET` is set, API commands (`me`, `workspaces`, `projects`, `sections`, `tasks`) automatically refresh the saved access token before making requests when it is expired or within 5 minutes of expiration. The refreshed token is saved back to the config file. If the token cannot be refreshed, the command exits with an error instead of making the API call.
 
 ## Skills
 

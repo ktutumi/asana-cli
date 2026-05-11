@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ktutumi/asana-cli-go/internal/cli"
 	"github.com/ktutumi/asana-cli-go/internal/config"
@@ -354,6 +355,181 @@ func TestSectionsListDuplicateTarget(t *testing.T) {
 	code := cli.RunCLI([]string{"sections", "list", "proj-1", "--project", "proj-2"}, ioOut, opts)
 	if code != 1 {
 		t.Fatalf("want 1 got %d", code)
+	}
+}
+
+func TestEnvReadsClientSecret(t *testing.T) {
+	t.Setenv("ASANA_CLIENT_SECRET", "secret")
+	opts := cli.NewRuntimeOptionsFromEnv()
+	if opts.ClientSecret != "secret" {
+		t.Fatalf("ClientSecret=%q", opts.ClientSecret)
+	}
+}
+
+func TestAPICmdRefreshesExpiredTokenWhenClientSecretSet(t *testing.T) {
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), "grant_type=refresh_token") {
+			t.Fatalf("body=%s", string(body))
+		}
+		if !strings.Contains(string(body), "client_id=cid") {
+			t.Fatalf("body=%s", string(body))
+		}
+		if !strings.Contains(string(body), "client_secret=secret") {
+			t.Fatalf("body=%s", string(body))
+		}
+		if !strings.Contains(string(body), "refresh_token=rt1") {
+			t.Fatalf("body=%s", string(body))
+		}
+		_, _ = w.Write([]byte(`{"access_token":"at2","refresh_token":"rt2","token_type":"Bearer","expires_in":3600}`))
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer at2" {
+			t.Fatalf("auth=%s", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"data":{"gid":"u1","name":"user"}}`))
+	}))
+	t.Cleanup(api.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "credentials.json")
+	expiresAt := time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339)
+	writeConfig(t, cfgPath, config.StoredConfig{ClientID: "cid", Token: &config.TokenData{AccessToken: "at1", RefreshToken: "rt1", TokenType: "Bearer", ExpiresAt: expiresAt}})
+
+	opts := cli.RuntimeOptions{ConfigPath: cfgPath, APIBase: api.URL + "/", TokenEndpoint: tokenSrv.URL, ClientSecret: "secret"}
+	outBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"me"}, &cli.CliIO{Out: outBuf, ErrOut: &bytes.Buffer{}}, opts)
+	if code != 0 {
+		t.Fatalf("want 0 got %d output=%s", code, outBuf.String())
+	}
+	if !strings.Contains(outBuf.String(), "u1") {
+		t.Fatalf("output=%s", outBuf.String())
+	}
+
+	cfg, err := config.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.Token.AccessToken != "at2" {
+		t.Fatalf("access token not updated: %s", cfg.Token.AccessToken)
+	}
+	if cfg.Token.RefreshToken != "rt2" {
+		t.Fatalf("refresh token not updated: %s", cfg.Token.RefreshToken)
+	}
+}
+
+func TestAPICmdDoesNotRefreshWithoutClientSecret(t *testing.T) {
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("token server should not be called")
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer at1" {
+			t.Fatalf("auth=%s", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"data":{"gid":"u1","name":"user"}}`))
+	}))
+	t.Cleanup(api.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "credentials.json")
+	expiresAt := time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339)
+	writeConfig(t, cfgPath, config.StoredConfig{ClientID: "cid", Token: &config.TokenData{AccessToken: "at1", RefreshToken: "rt1", TokenType: "Bearer", ExpiresAt: expiresAt}})
+
+	opts := cli.RuntimeOptions{ConfigPath: cfgPath, APIBase: api.URL + "/", TokenEndpoint: tokenSrv.URL, ClientSecret: ""}
+	outBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"me"}, &cli.CliIO{Out: outBuf, ErrOut: &bytes.Buffer{}}, opts)
+	if code != 0 {
+		t.Fatalf("want 0 got %d output=%s", code, outBuf.String())
+	}
+	if !strings.Contains(outBuf.String(), "u1") {
+		t.Fatalf("output=%s", outBuf.String())
+	}
+}
+
+func TestAPICmdDoesNotRefreshWhenTokenStillValid(t *testing.T) {
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("token server should not be called")
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer at1" {
+			t.Fatalf("auth=%s", r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"data":{"gid":"u1","name":"user"}}`))
+	}))
+	t.Cleanup(api.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "credentials.json")
+	expiresAt := time.Now().UTC().Add(1 * time.Hour).Format(time.RFC3339)
+	writeConfig(t, cfgPath, config.StoredConfig{ClientID: "cid", Token: &config.TokenData{AccessToken: "at1", RefreshToken: "rt1", TokenType: "Bearer", ExpiresAt: expiresAt}})
+
+	opts := cli.RuntimeOptions{ConfigPath: cfgPath, APIBase: api.URL + "/", TokenEndpoint: tokenSrv.URL, ClientSecret: "secret"}
+	outBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"me"}, &cli.CliIO{Out: outBuf, ErrOut: &bytes.Buffer{}}, opts)
+	if code != 0 {
+		t.Fatalf("want 0 got %d output=%s", code, outBuf.String())
+	}
+	if !strings.Contains(outBuf.String(), "u1") {
+		t.Fatalf("output=%s", outBuf.String())
+	}
+}
+
+func TestAPICmdRefreshFailureDoesNotCallAPI(t *testing.T) {
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"invalid_grant"}`))
+	}))
+	t.Cleanup(tokenSrv.Close)
+
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("API server should not be called")
+	}))
+	t.Cleanup(api.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "credentials.json")
+	expiresAt := time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339)
+	writeConfig(t, cfgPath, config.StoredConfig{ClientID: "cid", Token: &config.TokenData{AccessToken: "at1", RefreshToken: "rt1", TokenType: "Bearer", ExpiresAt: expiresAt}})
+
+	opts := cli.RuntimeOptions{ConfigPath: cfgPath, APIBase: api.URL + "/", TokenEndpoint: tokenSrv.URL, ClientSecret: "secret"}
+	errBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"me"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errBuf}, opts)
+	if code != 1 {
+		t.Fatalf("want 1 got %d", code)
+	}
+	if !strings.Contains(errBuf.String(), "refresh access token") {
+		t.Fatalf("err=%s", errBuf.String())
+	}
+	if strings.Contains(errBuf.String(), "secret") || strings.Contains(errBuf.String(), "rt1") {
+		t.Fatalf("secret or token leaked in err=%s", errBuf.String())
+	}
+}
+
+func TestAPICmdExpiredTokenWithoutRefreshTokenErrors(t *testing.T) {
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Fatalf("API server should not be called")
+	}))
+	t.Cleanup(api.Close)
+
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "credentials.json")
+	expiresAt := time.Now().UTC().Add(1 * time.Minute).Format(time.RFC3339)
+	writeConfig(t, cfgPath, config.StoredConfig{ClientID: "cid", Token: &config.TokenData{AccessToken: "at1", RefreshToken: "", TokenType: "Bearer", ExpiresAt: expiresAt}})
+
+	opts := cli.RuntimeOptions{ConfigPath: cfgPath, APIBase: api.URL + "/", ClientSecret: "secret"}
+	errBuf := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"me"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errBuf}, opts)
+	if code != 1 {
+		t.Fatalf("want 1 got %d", code)
+	}
+	if !strings.Contains(errBuf.String(), "refresh token is not configured") {
+		t.Fatalf("err=%s", errBuf.String())
 	}
 }
 

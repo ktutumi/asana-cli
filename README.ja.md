@@ -249,6 +249,11 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 - `ASANA_API_BASE`: Asana API base URL を上書き
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: OAuth token endpoint を上書き
 - `BROWSER`: `auth login` で使うブラウザコマンド
+- `ASANA_CLIENT_SECRET`: 保存済み access token が期限切れまたは期限間近の場合、API コール前に自動 refresh を有効化する。値は永続化されません。
+
+### 自動 token refresh
+
+`ASANA_CLIENT_SECRET` を設定すると、`me` / `workspaces` / `projects` / `sections` / `tasks` などの API コマンド実行前に、保存済み access token の有効期限を確認します。期限切れまたは残り5分以内の場合、自動的に refresh して新しい token を設定ファイルに保存します。refresh に失敗した場合は API コールを行わずエラーで終了します。
 
 ## Skills
 

@@ -52,12 +52,13 @@ func (c *CliIO) err() io.Writer {
 
 type RuntimeOptions struct {
 	ConfigPath, Output, APIBase, TokenEndpoint, Browser string
+	ClientSecret                                        string
 	OpenBrowser                                         func(string) error
 	HTTPClient                                          interface{}
 }
 
 func NewRuntimeOptionsFromEnv() RuntimeOptions {
-	return RuntimeOptions{APIBase: getenv("ASANA_API_BASE", "https://app.asana.com/api/1.0/"), TokenEndpoint: getenv("ASANA_OAUTH_TOKEN_ENDPOINT", "https://app.asana.com/-/oauth_token"), Browser: os.Getenv("BROWSER"), Output: "table"}
+	return RuntimeOptions{APIBase: getenv("ASANA_API_BASE", "https://app.asana.com/api/1.0/"), TokenEndpoint: getenv("ASANA_OAUTH_TOKEN_ENDPOINT", "https://app.asana.com/-/oauth_token"), Browser: os.Getenv("BROWSER"), ClientSecret: os.Getenv("ASANA_CLIENT_SECRET"), Output: "table"}
 }
 func getenv(k, d string) string {
 	if v := os.Getenv(k); v != "" {
@@ -242,6 +243,64 @@ func dispatch(args []string, io *CliIO, rt RuntimeOptions) error {
 }
 
 func client(rt RuntimeOptions) *asana.Client { return asana.NewClient(rt.APIBase, rt.TokenEndpoint) }
+
+const tokenRefreshBuffer = 5 * time.Minute
+
+func tokenNeedsRefresh(tok config.TokenData, now time.Time, buffer time.Duration) bool {
+	if tok.ExpiresAt == "" {
+		return false
+	}
+	expiresAt, err := time.Parse(time.RFC3339, tok.ExpiresAt)
+	if err != nil {
+		return false
+	}
+	return !expiresAt.After(now.Add(buffer))
+}
+
+func loadAPIToken(ctx context.Context, path string, rt RuntimeOptions, c *asana.Client, now func() time.Time) (string, error) {
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		return "", err
+	}
+	if cfg.Token == nil || cfg.Token.AccessToken == "" {
+		return "", errors.New("access token is not configured; run `asana-cli auth login` or use `auth url` and `auth exchange` manual flow")
+	}
+
+	if rt.ClientSecret == "" {
+		return cfg.Token.AccessToken, nil
+	}
+
+	if !tokenNeedsRefresh(*cfg.Token, now().UTC(), tokenRefreshBuffer) {
+		return cfg.Token.AccessToken, nil
+	}
+
+	if cfg.ClientID == "" {
+		return "", fmt.Errorf("access token is expired or near expiration, but client id is not configured; run `asana-cli auth login` or `asana-cli auth exchange`")
+	}
+	if cfg.Token.RefreshToken == "" {
+		return "", fmt.Errorf("access token is expired or near expiration, but refresh token is not configured; run `asana-cli auth login` or `asana-cli auth exchange`")
+	}
+
+	refreshed, err := c.RefreshAccessToken(ctx, cfg.ClientID, rt.ClientSecret, cfg.Token.RefreshToken)
+	if err != nil {
+		return "", fmt.Errorf("refresh access token: %w", err)
+	}
+
+	if refreshed.RefreshToken == "" {
+		refreshed.RefreshToken = cfg.Token.RefreshToken
+	}
+
+	if err := config.SaveConfig(path, config.StoredConfig{
+		ClientID:    cfg.ClientID,
+		RedirectURI: cfg.RedirectURI,
+		Token:       &refreshed,
+	}); err != nil {
+		return "", err
+	}
+
+	return refreshed.AccessToken, nil
+}
+
 func loadToken(path string) (string, error) {
 	cfg, err := config.LoadConfig(path)
 	if err != nil {
@@ -430,11 +489,11 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 			sub = "list"
 		}
 	}
-	tok, err := loadToken(rt.ConfigPath)
+	c := client(rt)
+	tok, err := loadAPIToken(context.Background(), rt.ConfigPath, rt, c, time.Now)
 	if err != nil {
 		return err
 	}
-	c := client(rt)
 	switch kind + ":" + sub {
 	case "me:get":
 		v, err := c.FetchMe(context.Background(), tok)
