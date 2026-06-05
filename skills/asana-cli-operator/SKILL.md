@@ -12,6 +12,8 @@ metadata:
 
 # Asana CLI Operator
 
+> 更新日時: 2026-06-01 23:32
+
 ## Goal
 
 Use the `asana-cli` tool correctly and efficiently for real Asana reads and OAuth maintenance.
@@ -63,6 +65,24 @@ Why:
 - token values are redacted, so it is safe to share the output unless the user asks otherwise
 
 If credentials are missing, do not pretend the API calls will work. Move to the authentication flows below.
+
+## Expired-token hard rule
+
+When `asana-cli auth status` shows an expired access token and a refresh token is present, your next command MUST be:
+
+```bash
+asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
+```
+
+This is mandatory whenever `ASANA_CLIENT_SECRET` is available. Do this before any other investigation, API read, config-file inspection, `auth url`, `auth exchange`, or `auth login` attempt.
+
+If `ASANA_CLIENT_SECRET` is not available, ask for it explicitly and do not explore alternative authentication methods first. Only switch to `auth login` or the manual `auth url` + `auth exchange` flow after `auth refresh` has actually failed because the refresh token is missing, invalid, revoked, or rejected by Asana.
+
+Common rationalizations are wrong:
+- Do not inspect the credentials file to look for another way around refresh.
+- Do not retry the original read command before refreshing.
+- Do not start OAuth login just because the access token expired.
+- Do not ask for `ASANA_CLIENT_ID` when refresh only needs `--client-secret`.
 
 ## Output format policy
 
