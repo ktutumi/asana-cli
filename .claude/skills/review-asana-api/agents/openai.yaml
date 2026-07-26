@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Asana API"
+  short_description: "Review Asana API and OAuth correctness"
+  default_prompt: "Use $review-asana-api to review these Asana API or OAuth changes for correctness and safety."

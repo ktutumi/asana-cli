@@ -145,20 +145,19 @@ helper that exists in the current checkout.
 Prefer stable scalar columns. Use dotted paths such as `created_by.name` for
 nested fields already supported by `value`.
 
-## Conditional Subagent Routing
+## Focused Skill Routing
 
-Delegate only when a role has an independent, useful review or implementation
-scope. Do not dispatch every role by default.
+Read only the focused skill needed for the current task:
 
-- `.claude/agents/go-cli-implementer.md`: focused CLI implementation and tests.
-- `.claude/agents/asana-api-reviewer.md`: read-only review of endpoint, query,
-  pagination, OAuth, and error behavior.
-- `.claude/agents/test-security-reviewer.md`: final review when auth, config,
-  HTTP, filesystem permissions, secrets, or output contracts changed.
+- `.claude/skills/implement-asana-cli-go/SKILL.md`: focused CLI implementation
+  and tests.
+- `.claude/skills/review-asana-api/SKILL.md`: read-only review of endpoint,
+  query, pagination, OAuth, and error behavior.
+- `.claude/skills/review-asana-cli-security/SKILL.md`: final review when auth,
+  config, HTTP, filesystem permissions, secrets, or output contracts changed.
 
-Do not run multiple implementers against `internal/cli/cli.go` concurrently.
-The main agent remains responsible for inspecting the final diff and running the
-verification commands.
+The active agent remains responsible for inspecting the final diff and running
+the verification commands.
 
 ## Verification
 

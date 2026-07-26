@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Asana CLI Security"
+  short_description: "Review tests, credentials, and release safety"
+  default_prompt: "Use $review-asana-cli-security to perform a final test and security review of these asana-cli-go changes."
