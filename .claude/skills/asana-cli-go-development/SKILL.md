@@ -1,61 +1,179 @@
 ---
 name: asana-cli-go-development
-description: Use when implementing, reviewing, or planning changes in ktutumi/asana-cli-go, a dependency-light Go CLI for Asana OAuth and read-only API access.
-version: 1.0.0
+description: Use when implementing, reviewing, or planning changes to commands, flags, output, OAuth, credential storage, or Asana HTTP behavior in this Go repository.
+version: 1.1.0
 author: Project Agents
 license: MIT
 metadata:
   hermes:
     tags: [go, cli, asana, oauth, testing, agentic-development]
-    related_skills: [subagent-driven-development, test-driven-development, systematic-debugging, requesting-code-review]
+    related_skills: [test-driven-development, systematic-debugging, requesting-code-review]
 ---
 
 # asana-cli-go Development
 
 ## Overview
 
-This skill captures the project-specific workflow for `github.com/ktutumi/asana-cli-go`.
+Use the repository's existing, dependency-light patterns instead of inventing new
+abstractions. Protect authentication data and public CLI behavior with focused,
+hermetic tests.
 
-The project is a small Go CLI with no runtime dependencies beyond the standard library. It implements Asana OAuth login/manual flow, local credential storage, and read-only Asana API commands for users, workspaces, projects, tasks, stories, comments, and attachments.
-
-Use this skill to keep agents aligned on architecture, tests, security boundaries, and compatibility expectations.
+The Go module is `github.com/ktutumi/asana-cli-go`. It provides Asana OAuth,
+local credential storage, and read-only API commands.
 
 ## When to Use
 
 Use this skill when:
 
-- Adding or changing an `asana-cli` command, flag, output format, or help text.
-- Adding an Asana API endpoint wrapper.
-- Changing OAuth login, manual exchange, refresh, callback server, or config persistence.
-- Reviewing a proposed patch for secret leakage, output compatibility, or API correctness.
-- Planning multi-step work that should be delegated to project subagents.
+- Adding or changing a command, flag, alias, output format, error, or help text.
+- Adding or reviewing Asana API or OAuth HTTP behavior.
+- Changing OAuth login, manual exchange, refresh, callback handling, or config
+  persistence.
+- Reviewing changes for secret leakage, output compatibility, or API correctness.
 
-Do not use this skill for unrelated repository housekeeping that does not touch Go, CLI behavior, Asana API behavior, docs, or tests.
+Do not use it for repository housekeeping that does not affect Go code, CLI
+behavior, API behavior, authentication, tests, or user documentation.
+
+## Hard Gates
+
+1. Never expose real credentials, secrets, authorization codes, or token values.
+2. Never call the real Asana API unless the user explicitly requests that run and
+   supplies the required credentials.
+3. Preserve existing commands, aliases, flags, output contracts, and credential
+   protections unless the user explicitly requests a breaking change.
+4. Use `httptest.Server` and temporary config paths for tests.
 
 ## Repository Map
 
-- `cmd/asana-cli/main.go`: binary entrypoint; calls `cli.RunCLI` and exits with the returned code.
-- `internal/cli/cli.go`: command router, flag parser, output rendering, help text, auth command orchestration.
-- `internal/cli/cli_test.go`: CLI behavior tests using `captureIO`.
-- `internal/asana/client.go`: HTTP client for Asana API and OAuth token endpoints.
-- `internal/oauth/oauth.go`: authorization URL, default scopes, random state, callback parsing.
-- `internal/oauth/callback.go`: localhost callback server for OAuth login.
-- `internal/config/config.go`: credential file path, load/save, token merge, file permissions.
-- `README.md`: Japanese user documentation and command reference.
-- `go.mod`: module declaration; currently standard-library-only.
+- `cmd/asana-cli/main.go`: binary entrypoint.
+- `internal/cli/cli.go`: `RunCLI`, global flag parsing, `authCmd`, `apiCmd`,
+  rendering, and help text.
+- `internal/cli/cli_test.go`: CLI tests with captured `CliIO`.
+- `internal/asana/client.go`: OAuth token requests and Asana API client.
+- `internal/asana/client_test.go`: hermetic HTTP request and response tests.
+- `internal/oauth/oauth.go`: authorization URL, state, and redirect validation.
+- `internal/oauth/callback.go`: localhost callback server.
+- `internal/config/config.go`: credential load, merge, save, and permissions.
+- `README.md`: English user documentation.
+- `README.ja.md`: Japanese user documentation.
 
-## Standard Commands
+## Implementation Playbook
 
-Run from repo root:
+1. Identify the behavior boundary.
+   - Parsing, routing, rendering, help: `internal/cli`
+   - API paths, queries, pagination, token HTTP: `internal/asana`
+   - Authorization URL, redirect validation, callback, state: `internal/oauth`
+   - Credential persistence and permissions: `internal/config`
 
-```sh
-go test ./...
-go test ./internal/cli -run TestName -v
-go build -o /tmp/asana-cli ./cmd/asana-cli
-gofmt -w <changed-go-files>
+2. Add or update focused tests before implementation when practical.
+   - CLI: call `RunCLI(args, io, RuntimeOptions{})` with captured output.
+   - HTTP: use `httptest.Server`; point `APIBase` or `TokenEndpoint` at it.
+   - Config: use `t.TempDir()` and an explicit config path.
+   - Cover both success and user-error behavior for new flags or subcommands.
+
+3. Implement the smallest compatible change.
+   - Keep global flags before the subcommand.
+   - Preserve existing singular/plural aliases where supported.
+   - Keep errors actionable without including secrets or response bodies that
+     may contain secrets.
+
+4. Update user-facing surfaces together.
+   - Command routing and parsing in `internal/cli/cli.go`.
+   - `rootHelp` or `commandHelp`.
+   - Both `README.md` and `README.ja.md`.
+   - Output columns when table or compact output needs a stable field set.
+
+5. Format, test, build, and review the final diff.
+
+## Adding a Read-Only Asana Command
+
+1. Add CLI routing and validation tests.
+2. Add the client method in `internal/asana/client.go`.
+   - Escape each path parameter with `url.PathEscape`.
+   - Use `getOne` for a single `data` object.
+   - Use `getList` for a `data` collection; it follows `next_page.offset`.
+   - Pass query parameters as `url.Values`; `doJSON` encodes them.
+3. Route the command through `apiCmd`.
+4. Add or update the entry in `columns` for stable table/compact output.
+5. Update help and both README files.
+6. Run targeted tests, then the full verification commands.
+
+<Good>
+
+```go
+return c.getList(token, "tasks/"+url.PathEscape(gid)+"/subtasks", nil)
 ```
 
-Safe smoke commands:
+This follows the existing pagination path and escapes the user-supplied GID.
+
+</Good>
+
+<Bad>
+
+```go
+return c.getList(token, "tasks/"+gid+"/subtasks", nil)
+```
+
+This bypasses path escaping and can produce an incorrect request path.
+
+</Bad>
+
+Do not name a helper from memory. Inspect `internal/asana/client.go` and reuse the
+helper that exists in the current checkout.
+
+## OAuth and Config Changes
+
+- `auth login` accepts only `http://localhost/...` or
+  `http://127.0.0.1/...` redirect URIs with a path and without query or fragment.
+- Generate OAuth `state` when omitted and compare it with the callback value.
+- The manual flow is `auth url` followed by `auth exchange`; OOB redirect URIs
+  are not supported.
+- Do not persist `clientSecret`.
+- Redact access and refresh tokens from all user-facing output.
+- Preserve config directory mode `0700` and credentials file mode `0600`.
+- Test token endpoints with `TokenEndpoint`; never use the production endpoint
+  in tests.
+
+## Output Contract
+
+- `json`: pretty-printed JSON produced by `json.MarshalIndent`.
+- `table` collection: header row followed by tab-separated rows.
+- `table` object: `field<TAB>value` per line.
+- `compact`: `field=value` lines; collection fields share one logical line.
+- `table` and `compact`: escape backslash, tab, CR, and LF.
+
+Prefer stable scalar columns. Use dotted paths such as `created_by.name` for
+nested fields already supported by `value`.
+
+## Conditional Subagent Routing
+
+Delegate only when a role has an independent, useful review or implementation
+scope. Do not dispatch every role by default.
+
+- `.claude/agents/go-cli-implementer.md`: focused CLI implementation and tests.
+- `.claude/agents/asana-api-reviewer.md`: read-only review of endpoint, query,
+  pagination, OAuth, and error behavior.
+- `.claude/agents/test-security-reviewer.md`: final review when auth, config,
+  HTTP, filesystem permissions, secrets, or output contracts changed.
+
+Do not run multiple implementers against `internal/cli/cli.go` concurrently.
+The main agent remains responsible for inspecting the final diff and running the
+verification commands.
+
+## Verification
+
+Run from the repository root. Every executed command must exit successfully.
+
+```sh
+gofmt -w <changed-go-files>
+go test ./...
+go build -o /tmp/asana-cli ./cmd/asana-cli
+```
+
+Run `gofmt` only when Go files changed. Add a targeted test command such as
+`go test ./internal/cli -run TestName -v` while iterating.
+
+Use relevant credential-free smoke checks:
 
 ```sh
 go run ./cmd/asana-cli --help
@@ -64,108 +182,15 @@ go run ./cmd/asana-cli auth url --client-id dummy --state fixed
 go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```
 
-Avoid commands that hit real Asana endpoints unless the user explicitly requests a live integration check.
+Before completion, confirm:
 
-## Implementation Playbook
+- The final diff contains no real credentials, token values, or authorization
+  codes.
+- HTTP tests use local test servers and config tests use temporary paths.
+- API paths, query parameters, pagination, and error paths are tested or reviewed.
+- Help and both README files match any user-facing change.
+- Output and credential-file contracts remain intact.
 
-1. Identify the package and behavior boundary.
-   - CLI parsing/rendering: `internal/cli`.
-   - API request path/query/pagination: `internal/asana`.
-   - OAuth URL/callback/state: `internal/oauth`.
-   - Credentials: `internal/config`.
-
-2. Start with tests when practical.
-   - CLI behavior: add a focused `RunCLI` test in `internal/cli/cli_test.go`.
-   - HTTP client behavior: create package tests with `httptest.Server`.
-   - Config behavior: use `t.TempDir()` and never touch real user config.
-
-3. Implement the smallest compatible change.
-   - Preserve aliases such as singular/plural commands when present.
-   - Keep global flags parsed before subcommands.
-   - Keep error messages user-readable.
-
-4. Format and test.
-   - Run `gofmt` on changed Go files.
-   - Run targeted tests, then `go test ./...`.
-
-5. Update docs/help when user-facing behavior changes.
-   - README command tables and examples.
-   - `printHelp` / `printAuthSubcommandHelp` / subcommand help strings.
-
-6. Perform review gates.
-   - Asana API correctness gate.
-   - Secret/config security gate.
-   - Output compatibility gate.
-
-## Adding a New Read-Only Asana Command
-
-Typical sequence:
-
-1. Add tests for CLI routing and flag validation.
-2. Add an API method in `internal/asana/client.go`.
-   - Use `joinSegments` for path parameters.
-   - Use `getPaginated` for list endpoints with `next_page.offset`.
-   - Use `getDataJSON` for single-object endpoints.
-   - Set query parameters with `u.Query()` and `u.RawQuery = q.Encode()`.
-3. Add rendering profile columns in `internal/cli/cli.go` if table/compact output needs a stable subset.
-4. Route the command in the relevant handler or add a new handler if it is a new top-level noun.
-5. Add help text and README docs.
-6. Run `go test ./...` and non-credential smoke checks.
-
-## OAuth and Config Rules
-
-- Never expose real tokens in stdout/stderr/tests/docs.
-- `auth login` is localhost callback only; manual/OOB flow uses `auth url` + `auth exchange`.
-- OAuth `state` must be generated when omitted and checked after callback.
-- Callback redirect URI must stay `http://localhost` or `http://127.0.0.1` and must not include query or fragment.
-- Config files must be written with owner-only permissions (`0600`) and config directory private permissions (`0700`).
-- Use temp config files in tests: `--config`, `t.TempDir() + "/credentials.json"`.
-
-## Output Contract
-
-- JSON: pretty-printed with `json.MarshalIndent`.
-- Table collections: header row, then tab-separated row values.
-- Table objects: `field\tvalue`, then one row per configured column.
-- Compact: `field=value` lines.
-- Table/compact values must be sanitized to escape `\\`, tab, CR, and LF.
-
-When adding columns, prefer stable scalar fields. Nested fields may use dotted paths such as `created_by.name`.
-
-## Subagent Workflow
-
-For multi-step changes, orchestrate with these project subagents:
-
-- `.claude/agents/go-cli-implementer.md`: writes tests and code for CLI behavior.
-- `.claude/agents/asana-api-reviewer.md`: verifies Asana endpoint paths, queries, OAuth assumptions, and pagination.
-- `.claude/agents/test-security-reviewer.md`: reviews tests, secret handling, credential file safety, and final readiness.
-
-Recommended order:
-
-1. `go-cli-implementer` implements a focused task with tests.
-2. `asana-api-reviewer` reviews endpoint/OAuth/API assumptions if HTTP behavior changed.
-3. `test-security-reviewer` performs final quality/security review.
-4. Main agent verifies with `go test ./...` and smoke commands.
-
-Do not run two implementation subagents concurrently against `internal/cli/cli.go`.
-
-## Common Pitfalls
-
-1. Live API calls in tests. Use `httptest.Server` and runtime endpoint overrides instead.
-2. Secret leakage. Redact tokens and avoid printing config contents.
-3. Missing README/help updates for user-facing flags.
-4. Adding dependencies for simple parsing. This project intentionally uses small hand-rolled parsing.
-5. Forgetting both singular and plural command aliases where the router supports them.
-6. Breaking table/compact one-line output by failing to sanitize embedded tabs/newlines.
-7. Touching the real default config path in tests.
-8. Changing OAuth callback security by allowing non-localhost redirects.
-
-## Verification Checklist
-
-- [ ] Changed Go files are `gofmt` formatted.
-- [ ] Targeted tests pass.
-- [ ] `go test ./...` passes.
-- [ ] User-facing help and README are updated when commands/flags changed.
-- [ ] No real credentials or tokens appear in files or test output.
-- [ ] API paths and query parameters are tested or reviewed.
-- [ ] Config tests use temp paths and preserve permission expectations.
-- [ ] Output format compatibility is maintained.
+If an endpoint or OAuth assumption cannot be established from the current code,
+tests, or authoritative Asana documentation, stop and report the uncertainty
+instead of inventing behavior.

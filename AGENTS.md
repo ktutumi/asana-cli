@@ -1,40 +1,65 @@
 # AGENTS.md
 
-このリポジトリで AI Agent が安全かつ自律的に作業するためのプロジェクト指示です。
+このファイルは、このリポジトリ全体に適用する永続的な作業規約です。
+ユーザーの明示的な指示と、対象ファイルに近い `AGENTS.md` を優先してください。
 
-## Project Overview
+## Repository
 
-- Project: `github.com/ktutumi/asana-cli
-- Product: Asana OAuth CLI written in Go.
-- Goal: Terminal-first CLI for Asana OAuth authentication and read-only Asana API access.
-- Main binary: `cmd/asana-cli/main.go`
-- Core packages:
-  - `internal/cli`: command parsing, subcommands, rendering, config/token orchestration.
-  - `internal/asana`: Asana API and OAuth token HTTP client.
-  - `internal/oauth`: authorization URL generation and localhost callback server.
-  - `internal/config`: credentials file load/save and token merge behavior.
+- Go module: `github.com/ktutumi/asana-cli-go`
+- Entry point: `cmd/asana-cli/main.go`
+- CLI routing and rendering: `internal/cli`
+- Asana and OAuth HTTP client: `internal/asana`
+- OAuth URL and localhost callback: `internal/oauth`
+- Credential persistence: `internal/config`
+- User documentation: `README.md` and `README.ja.md`
 
-## Hard Rules
+Go、CLI、OAuth、Asana API の実装やレビューでは、該当する手順として
+`.claude/skills/asana-cli-go-development/SKILL.md` を使用してください。
 
-1. Never print, log, commit, or snapshot real `client_secret`, `access_token`, `refresh_token`, authorization `code`, or credentials file contents.
-2. Do not run commands that call the real Asana API unless the user explicitly asks and provides credentials for that run.
-3. Prefer hermetic tests with `httptest` and temp config paths over live network tests.
-4. Keep the CLI dependency-light. Do not add a CLI framework unless the user explicitly asks for a larger refactor.
-5. Keep user-facing command names and flags backward compatible unless the task is explicitly a breaking change.
-6. Preserve Japanese README tone when editing documentation.
-7. For any behavior change, add or update tests first when practical.
+## Safety and Compatibility
 
-## Build and Test Commands
+- 実物の `client_secret`、`access_token`、`refresh_token`、認可 `code`、credentials
+  ファイルの内容を出力、ログ、スナップショット、コミットに含めない。
+- ユーザーがその実行について明示的に依頼し、必要な認証情報を提供した場合を除き、
+  実 Asana API を呼ばない。
+- HTTP テストには `httptest.Server` と実行時 endpoint override を使い、設定を扱う
+  テストには `t.TempDir()` または一時 `--config` パスを使う。
+- CLI は標準ライブラリ中心の軽量な構成を保つ。大規模な再設計を依頼されない限り、
+  CLI フレームワークを追加しない。
+- 明示的な破壊的変更でない限り、既存のコマンド名、エイリアス、フラグを維持する。
+- `README.md` と `README.ja.md` の内容を対応させ、それぞれ既存の言語と文体を保つ。
 
-Run from the repository root:
+認証、OAuth、設定保存を変更する場合は、次の不変条件を維持してください。
+
+- callback は `localhost` または `127.0.0.1` のみに bind する。
+- OAuth `state` を生成し、callback で照合する。
+- ユーザー向け出力に `access_token` と `refresh_token` の実値を含めない。
+- config directory は `0700`、credentials file は `0600` を維持する。
+
+出力を変更する場合は、次の契約を維持してください。
+
+- `json`: valid pretty-printed JSON
+- `table`: collection は header row と tab-separated rows
+- `compact`: `field=value` lines
+- `table` / `compact`: backslash、tab、CR、LF を escape して一行出力を保つ
+
+## Change and Verification
+
+- 振る舞いを変更する場合は、実用的な範囲で先に focused test を追加または更新する。
+- CLI テストは buffer を設定した `CliIO` と
+  `RunCLI(args, io, RuntimeOptions{})` を使う。
+- command、flag、環境変数を変更した場合は、help と両方の README を更新する。
+- 依頼範囲外の問題は勝手に修正せず、必要なら報告する。
+
+リポジトリルートで、変更範囲に応じて次を実行してください。
 
 ```sh
+gofmt -w <changed-go-files>
 go test ./...
-go test ./internal/cli -run TestName -v
 go build -o /tmp/asana-cli ./cmd/asana-cli
 ```
 
-Useful manual smoke checks that do not require credentials:
+資格情報を必要としない smoke check:
 
 ```sh
 go run ./cmd/asana-cli --help
@@ -42,102 +67,3 @@ go run ./cmd/asana-cli --version
 go run ./cmd/asana-cli auth url --client-id dummy --state fixed
 go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```
-
-If formatting changed:
-
-```sh
-gofmt -w <changed-go-files>
-go test ./...
-```
-
-## Architecture Notes
-
-### CLI flow
-
-`cmd/asana-cli/main.go` passes `os.Args[1:]` into `cli.RunCLI` with `cli.NewRuntimeOptionsFromEnv()`.
-
-`internal/cli/cli.go`:
-
-- Parses global flags before the command: `--config`, `--output`, `--help`, `--version`.
-- Builds default runtime endpoints when env overrides are absent.
-- Routes commands to `handleAuth`, `handleProjects`, `handleTasks`, `handleWorkspaces`, `handleSections`, or `me`.
-- Uses `CliIO` to make stdout/stderr assertions easy in tests.
-- Renders output as `json`, `table`, or `compact`.
-- `tasks` subcommands: `list`, `get`, `subtasks`, `stories`, `comments`, `attachments`.
-  - `stories` returns full story history with compact records.
-  - `comments` extracts only `comment_added` stories and includes `text`/`html_text`/`created_at`/`created_by.name`.
-
-### Asana API client
-
-`internal/asana/client.go` wraps an `http.Client` and exposes small methods such as `FetchMe`, `ListWorkspaces`, `ListProjects`, `ListTasks`, `GetTask`, `ListComments`, and OAuth token exchange/refresh.
-
-Pagination is handled in `getPaginated`; new list endpoints should normally reuse it.
-
-### OAuth and config
-
-`internal/oauth` handles URL generation, CSRF state generation, callback parsing, and the localhost callback server.
-
-`internal/config` stores credentials at the platform config path by default and writes files with owner-only permissions. Tests must use temp config paths.
-
-## Implementation Workflow
-
-For non-trivial tasks, use the in-repo skill `.claude/skills/asana-cli-go-development/SKILL.md` and delegate to subagents in `.claude/agents/`:
-
-1. Clarify the smallest safe behavior change.
-2. Write or update tests first, usually in `internal/cli/cli_test.go` or a package-specific `_test.go` file.
-3. Implement the minimal change.
-4. Run `gofmt` on changed Go files.
-5. Run `go test ./...`.
-6. Run a targeted smoke command when relevant.
-7. Review for secret handling, output compatibility, and Asana API URL correctness.
-
-## Recommended Subagent Routing
-
-- Use `go-cli-implementer` for command parsing, rendering, test-first CLI features, and small Go implementation tasks.
-- Use `asana-api-reviewer` for endpoint paths, query parameters, pagination, OAuth behavior, and API error handling.
-- Use `test-security-reviewer` before finalizing changes that touch auth, config, HTTP requests, output rendering, or filesystem permissions.
-
-Do not dispatch multiple implementers to edit `internal/cli/cli.go` concurrently; it is a single large routing file and merge conflicts are likely.
-
-## Testing Guidance
-
-- CLI tests should instantiate `captureIO` and call `RunCLI(args, io, RuntimeOptions{})`.
-- Use `t.TempDir()` for all `--config` paths.
-- Prefer `strings.Contains` assertions for help/error text unless exact output is part of the contract.
-- For HTTP behavior, prefer `httptest.Server` plus `RuntimeOptions{APIBase: server.URL + "/", TokenEndpoint: server.URL + "/oauth"}`.
-- Test both success and user-error paths for new flags/subcommands.
-
-## Output Compatibility
-
-- `json` output must remain valid pretty-printed JSON.
-- `table` output uses tab-separated columns and a header row for collections.
-- `compact` output uses `field=value` lines.
-- Sanitization must preserve one-line table/compact output by escaping tabs, CR, LF, and backslashes.
-
-## Security Checklist
-
-Before finishing auth/config/API changes:
-
-- [ ] No real secrets in code, tests, docs, or terminal output.
-- [ ] Token output is redacted where appropriate.
-- [ ] Config writes retain `0600` file permissions and private config directory behavior.
-- [ ] OAuth state is generated and checked for localhost login.
-- [ ] Callback listener remains localhost-only.
-- [ ] Tests avoid live Asana network calls.
-
-## Documentation Checklist
-
-When adding or changing commands:
-
-- [ ] Update README command list and examples.
-- [ ] Update help text in `internal/cli/cli.go`.
-- [ ] Add tests for new help/error behavior.
-- [ ] Mention any new environment variable in README.
-
-## Session Tips
-
-- Press `#` during a session to auto-incorporate learnings into this file.
-- Lessons from corrections go into `tasks/lessons.md`.
-- Work plans for multi-step tasks go into `.sisyphus/plans/*.md`.
-- In-repo skill: `.claude/skills/asana-cli-go-development/SKILL.md`
-- Subagent definitions: `.claude/agents/`
