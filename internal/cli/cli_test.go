@@ -228,11 +228,8 @@ func TestTasksGetMakesRequestAndRenders(t *testing.T) {
 
 func TestTasksListQueryAndDuplicateRules(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/tasks" {
+		if r.URL.Path != "/projects/pid/tasks" {
 			t.Fatalf("path=%s", r.URL.Path)
-		}
-		if r.URL.Query().Get("project") != "pid" {
-			t.Fatalf("query=%s", r.URL.RawQuery)
 		}
 		if r.Header.Get("Authorization") != "Bearer at" {
 			t.Fatalf("auth=%s", r.Header.Get("Authorization"))

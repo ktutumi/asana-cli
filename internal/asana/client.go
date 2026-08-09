@@ -86,7 +86,7 @@ func (c *Client) postToken(v url.Values) (config.TokenData, error) {
 		Data *config.TokenData `json:"data"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return config.TokenData{}, fmt.Errorf("token response decode: %w (body: %s)", err, string(bytes.TrimSpace(body)))
+		return config.TokenData{}, fmt.Errorf("token response decode: %w", err)
 	}
 	tok := raw.TokenData
 	if raw.Data != nil {
@@ -107,7 +107,7 @@ func (c *Client) postToken(v url.Values) (config.TokenData, error) {
 		}
 	}
 	if tok.AccessToken == "" {
-		return config.TokenData{}, fmt.Errorf("token response missing access_token (body: %s)", string(bytes.TrimSpace(body)))
+		return config.TokenData{}, fmt.Errorf("token response missing access_token")
 	}
 	if tok.ExpiresIn > 0 && tok.ExpiresAt == "" {
 		tok.ExpiresAt = c.now().UTC().Add(time.Duration(tok.ExpiresIn) * time.Second).Format(time.RFC3339)
@@ -144,7 +144,7 @@ func (c *Client) ListStories(_ context.Context, token, gid string) ([]Object, er
 	return c.getList(token, "tasks/"+url.PathEscape(gid)+"/stories", nil)
 }
 func (c *Client) ListAttachments(_ context.Context, token, gid string) ([]Object, error) {
-	return c.getList(token, "tasks/"+url.PathEscape(gid)+"/attachments", nil)
+	return c.getList(token, "attachments", values("parent", gid))
 }
 func (c *Client) ListComments(_ context.Context, token, gid string) ([]Object, error) {
 	q := url.Values{}
@@ -160,6 +160,14 @@ func (c *Client) ListComments(_ context.Context, token, gid string) ([]Object, e
 		}
 	}
 	return out, nil
+}
+
+func values(key, value string) url.Values {
+	q := url.Values{}
+	if value != "" {
+		q.Set(key, value)
+	}
+	return q
 }
 
 func (c *Client) getOne(token, path string, q url.Values, out *Object) error {
@@ -199,17 +207,32 @@ func (c *Client) getList(token, path string, q url.Values) ([]Object, error) {
 	return all, nil
 }
 func (c *Client) doJSON(token, path string, q url.Values, out any) error {
+	return c.doRequestJSON(context.Background(), token, http.MethodGet, path, q, nil, out)
+}
+
+func (c *Client) doRequestJSON(ctx context.Context, token, method, path string, q url.Values, data, out any) error {
 	u, err := url.Parse(c.APIBase + path)
 	if err != nil {
 		return err
 	}
 	u.RawQuery = q.Encode()
-	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	var body io.Reader
+	if data != nil {
+		encoded, err := json.Marshal(map[string]any{"data": data})
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return err
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if data != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
@@ -218,6 +241,12 @@ func (c *Client) doJSON(token, path string, q url.Values, out any) error {
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return decodeError(resp)
+	}
+	if resp.StatusCode == http.StatusNoContent || out == nil {
+		return nil
+	}
+	if resp.ContentLength == 0 {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
@@ -240,5 +269,5 @@ func decodeError(resp *http.Response) error {
 			return fmt.Errorf("asana error: %s", strings.Join(parts, "; "))
 		}
 	}
-	return fmt.Errorf("http %d: %s", resp.StatusCode, string(bytes.TrimSpace(b)))
+	return fmt.Errorf("http %d: unrecognized error response", resp.StatusCode)
 }
