@@ -236,7 +236,10 @@ asana-cli tasks update 789 --completed true
 task field には `--notes` / `--html-notes`、`--assignee`、`--completed`、
 `--approval-status`、`--resource-subtype`、`--start-on` / `--start-at`、
 `--due-on` / `--due-at`、複数指定できる `--follower`、`--project`、`--tag`、
-`--custom-field GID=VALUE`、`--membership PROJECT_GID=SECTION_GID` があります。
+`--custom-field GID=STRING`、`--custom-field-json GID=JSON`、
+`--membership PROJECT_GID=SECTION_GID` があります。text と数字だけに見える enum option
+GID には `--custom-field` を使い、number、boolean、array、object の型付き値にだけ
+`--custom-field-json` を使ってください。
 本文や日付の排他的な形式は API を呼ぶ前に検証します。update では明示した field だけを送信します。
 
 ```bash
@@ -259,7 +262,11 @@ asana-cli tasks get-custom-id OPS-42 --workspace 123
 
 list、search、get-custom-id では `--opt-fields` で追加 field を指定できます。
 workspace task 検索には Asana Premium が必要です。検索結果は eventual consistency であり、
-通常の list command で使う offset pagination は利用できません。`--limit` は最大100件です。
+通常の list command で使う offset pagination は利用できません。filter には
+`--assignee`、`--projects-any`、`--sections-any`、`--tags-any`、`--text`、
+`--completed`、`--is-subtask`、`--modified-at-after`、`--due-on-before` / `--due-on-after`、
+`--start-on-before` / `--start-on-after`、`--sort-by`、`--sort-ascending` があります。
+`--limit` は最大100件です。
 手動で続き取得する場合は作成時刻で sort し、処理済み item を後続 query から除外します。
 
 ### section と project 配置を操作する
@@ -296,13 +303,15 @@ asana-cli tasks add-followers 789 --follower 555 --follower 666
 編集できるのは comment story だけです。`--text` と `--html-text` は同時指定できません。
 Asana が batch body を受け付ける関連付けでは GID flag を複数回指定できます。
 dependency/dependent 合計上限を含む API 制限エラーは Asana のメッセージを表示します。
+複数の `add-tag` / `remove-tag` は tag ごとに1リクエストを送り、非原子的です。途中で失敗した場合、
+失敗した tag と、それより前に適用済みの tag 数を error に表示します。
 
 ### project と membership を操作する
 
 ```bash
 asana-cli projects get 123
-asana-cli projects create --workspace 456 --name "リリース"
-asana-cli projects update 123 --privacy-setting private
+asana-cli projects create --workspace 456 --name "リリース" --icon rocket --default-view list
+asana-cli projects update 123 --privacy-setting private --default-access-level editor
 asana-cli projects tasks 123
 asana-cli tasks projects 789
 asana-cli workspaces projects 456
@@ -315,10 +324,14 @@ asana-cli memberships update 789 --access-level commenter
 asana-cli memberships delete 789
 asana-cli projects add-followers 123 --follower 456
 asana-cli projects task-counts 123
+asana-cli projects duplicate 123 --name "リリースのコピー" --start-on 2026-09-01 --skip-weekends true
 ```
 
 新しい project 共有には deprecated な `team` field ではなく membership を使います。
 member には user または team を指定できます。project task count には Asana の追加 rate/cost limit があるため、頻繁な polling は避けてください。
+project の create/update では、複数指定できる `--custom-field GID=STRING` と
+`--custom-field-json GID=JSON` も使用できます。duplicate で `--start-on` または
+`--due-on` を変更する場合は `--skip-weekends true|false` が必須です。
 
 ### attachment
 
@@ -330,7 +343,7 @@ task、project、project brief に対応します。
 asana-cli attachments list 789
 asana-cli attachments get 123
 asana-cli attachments upload --parent 789 --file ./report.pdf
-asana-cli attachments upload --parent 789 --url https://example.com/report --name "レポート"
+asana-cli attachments upload --parent 789 --url https://example.com/report --name "レポート" --connect-to-app
 asana-cli attachments delete 123
 ```
 

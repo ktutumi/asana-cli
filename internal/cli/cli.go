@@ -663,7 +663,7 @@ func openURL(rt RuntimeOptions, u string) error {
 	}
 }
 
-var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "project": {"gid", "name", "archived", "privacy_setting", "workspace.name"}, "sections": {"gid", "name"}, "section": {"gid", "name", "project.gid"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "story": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "attachment": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "memberships": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "membership": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "job": {"gid", "status", "new_project.gid", "new_task.gid", "new_project_template.gid"}, "result": {"deleted", "gid", "resource_type"}, "task_counts": {"num_tasks", "num_incomplete_tasks", "num_completed_tasks", "num_milestones", "num_incomplete_milestones", "num_completed_milestones"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
+var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "project": {"gid", "name", "archived", "privacy_setting", "workspace.name"}, "sections": {"gid", "name"}, "section": {"gid", "name", "project.gid"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "story": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "attachment": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "memberships": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "membership": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "job": {"gid", "status", "new_project.gid", "new_task.gid", "new_project_template.gid"}, "result": {"deleted", "gid", "resource_type"}, "task_counts": {"num_tasks", "num_incomplete_tasks", "num_completed_tasks", "num_milestones", "num_incomplete_milestones", "num_completed_milestones"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
 
 func render(w io.Writer, format, typ string, data any) error {
 	if format == "json" {
@@ -820,7 +820,7 @@ Read:
   get-custom-id CUSTOM_ID --workspace GID
 
 Write:
-  create --name NAME (--workspace GID|--parent GID|--project GID)
+  create --name NAME (--workspace GID|--parent GID|--project GID|--membership PROJECT=SECTION)
   create-subtask PARENT_GID --name NAME [task fields]
   update TASK_GID [task fields]
   set-parent TASK_GID --parent GID [--insert-before GID|--insert-after GID]
@@ -835,11 +835,15 @@ Write:
   delete TASK_GID
 
 Task fields include --notes/--html-notes, --assignee, --completed true|false,
---start-on/--start-at, --due-on/--due-at, repeatable --follower, --project,
---tag, --custom-field GID=VALUE, and --membership PROJECT_GID=SECTION_GID.
+--approval-status, --resource-subtype, --start-on/--start-at, --due-on/--due-at,
+repeatable --follower, --project, --tag, --custom-field GID=STRING,
+--custom-field-json GID=JSON, and --membership PROJECT_GID=SECTION_GID.
 
 Search requires Asana Premium. Results are eventually consistent and do not
-support normal offset pagination; --limit accepts at most 100 items.
+support normal offset pagination; --limit accepts at most 100 items. Filters
+include --assignee, --projects-any, --sections-any, --tags-any, --text,
+--completed, --is-subtask, --modified-at-after, --due-on-before/--due-on-after,
+--start-on-before/--start-on-after, --sort-by, and --sort-ascending.
 Deleted tasks remain in the deleting user's Asana trash and can be recovered
 for 30 days; afterward Asana removes them permanently.
 `,
@@ -853,11 +857,14 @@ for 30 days; afterward Asana removes them permanently.
   task-counts PROJECT_GID
   add-followers|remove-followers PROJECT_GID --follower GID...
   duplicate PROJECT_GID --name NAME [--include FIELDS]
+    [(--start-on DATE|--due-on DATE) --skip-weekends true|false]
   save-as-template PROJECT_GID --name NAME --public true|false [--team GID|--workspace GID]
   delete PROJECT_GID
 
 Project fields include --notes/--html-notes, --color, --icon, --default-view,
---privacy-setting, --archived true|false, --owner, --start-on, and --due-on.
+--privacy-setting, --archived true|false, --owner, --start-on, --due-on,
+--default-access-level, repeatable --follower, --custom-field GID=STRING, and
+--custom-field-json GID=JSON.
 Task-count requests have an additional Asana rate/cost limit.
 `,
 		"sections": `Usage: asana-cli sections <subcommand> [options]

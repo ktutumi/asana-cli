@@ -3,8 +3,11 @@ package cli_test
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,10 +24,10 @@ func TestTaskCreateAndUpdateRequests(t *testing.T) {
 	}{
 		{
 			name:       "create",
-			args:       []string{"tasks", "create", "--workspace", "w1", "--name", "New task", "--completed", "false", "--custom-field", "cf1=3"},
+			args:       []string{"tasks", "create", "--workspace", "w1", "--name", "New task", "--completed", "false", "--custom-field", "cf1=3", "--custom-field-json", `cf2=["option-1","option-2"]`},
 			method:     http.MethodPost,
 			escaped:    "/tasks",
-			wantFields: map[string]any{"workspace": "w1", "name": "New task", "completed": false, "custom_fields": map[string]any{"cf1": float64(3)}},
+			wantFields: map[string]any{"workspace": "w1", "name": "New task", "completed": false, "custom_fields": map[string]any{"cf1": "3", "cf2": []any{"option-1", "option-2"}}},
 		},
 		{
 			name:       "update only specified fields",
@@ -68,6 +71,13 @@ func TestTaskAndSectionValidation(t *testing.T) {
 		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--due-on", "tomorrow"}, "YYYY-MM-DD"},
 		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--start-on", "2026-08-10"}, "requires --due-on"},
 		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--custom-field", "invalid"}, "GID=VALUE"},
+		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--custom-field-json", "cf=invalid"}, "valid JSON"},
+		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--custom-field", "cf=1", "--custom-field-json", "cf=1"}, "specified by both"},
+		{[]string{"tasks", "create", "--workspace", "w", "--name", "n", "--insert-before", "t"}, "not applicable"},
+		{[]string{"tasks", "create-subtask", "t", "--name", "n", "--workspace", "w"}, "not supported"},
+		{[]string{"tasks", "create-subtask", "t", "--name", "n", "--parent", "p"}, "not supported"},
+		{[]string{"tasks", "unset-parent", "t", "--insert-before", "a"}, "not applicable"},
+		{[]string{"tasks", "remove-project", "t", "--project", "p", "--section", "s"}, "not applicable"},
 		{[]string{"tasks", "set-parent", "t", "--parent", "p", "--insert-before", "a", "--insert-after", "b"}, "mutually exclusive"},
 		{[]string{"tasks", "list", "--project", "p", "--section", "s"}, "exactly one"},
 		{[]string{"tasks", "search", "--workspace", "w", "--limit", "101"}, "1 to 100"},
@@ -225,6 +235,113 @@ func TestAttachmentGetDeleteAndAsanaError(t *testing.T) {
 	errOut.Reset()
 	if code := cli.RunCLI([]string{"attachments", "delete", "attachment/1"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, opts); code != 0 {
 		t.Fatalf("code=%d err=%s", code, errOut.String())
+	}
+}
+
+func TestAttachmentUploadCLI(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "report.txt")
+	if err := os.WriteFile(filePath, []byte("report body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		want map[string]string
+	}{
+		{"file", []string{"attachments", "upload", "--parent", "task-1", "--file", filePath}, map[string]string{"parent": "task-1", "file": "report body"}},
+		{"external URL", []string{"attachments", "upload", "--parent", "task-1", "--url", "https://example.com/report", "--name", "Report", "--connect-to-app"}, map[string]string{"parent": "task-1", "url": "https://example.com/report", "name": "Report", "resource_subtype": "external", "connect_to_app": "true"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPost || r.URL.Path != "/attachments" {
+					t.Fatalf("request=%s %s", r.Method, r.URL.Path)
+				}
+				if err := r.ParseMultipartForm(1 << 20); err != nil {
+					t.Fatal(err)
+				}
+				for key, want := range tt.want {
+					if key == "file" {
+						file, _, err := r.FormFile("file")
+						if err != nil {
+							t.Fatal(err)
+						}
+						defer file.Close()
+						got, err := io.ReadAll(file)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if string(got) != want {
+							t.Fatalf("file=%q want=%q", got, want)
+						}
+						continue
+					}
+					if got := r.FormValue(key); got != want {
+						t.Fatalf("%s=%q want=%q", key, got, want)
+					}
+				}
+				_, _ = w.Write([]byte(`{"data":{"gid":"attachment-1","name":"Report"}}`))
+			}))
+			defer server.Close()
+
+			errOut := &bytes.Buffer{}
+			code := cli.RunCLI(tt.args, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "json"})
+			if code != 0 {
+				t.Fatalf("code=%d err=%s", code, errOut.String())
+			}
+		})
+	}
+}
+
+func TestAttachmentListPreservesLegacyTableColumns(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"gid":"a1","name":"Report","resource_subtype":"asana","download_url":"https://example.com/a1","created_at":"2026-08-10T00:00:00Z"}]}`))
+	}))
+	defer server.Close()
+	out, errOut := &bytes.Buffer{}, &bytes.Buffer{}
+	code := cli.RunCLI([]string{"attachments", "list", "task-1"}, &cli.CliIO{Out: out, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "table"})
+	if code != 0 {
+		t.Fatalf("code=%d err=%s", code, errOut.String())
+	}
+	if firstLine, _, _ := strings.Cut(out.String(), "\n"); firstLine != "gid\tname\tdownload_url\tcreated_at" {
+		t.Fatalf("header=%q", firstLine)
+	}
+}
+
+func TestStoryErrorsAreReported(t *testing.T) {
+	for _, status := range []int{http.StatusForbidden, http.StatusNotFound} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				_, _ = w.Write([]byte(`{"errors":[{"message":"story unavailable"}]}`))
+			}))
+			defer server.Close()
+			errOut := &bytes.Buffer{}
+			code := cli.RunCLI([]string{"stories", "get", "story-1"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL})
+			if code != 1 || !strings.Contains(errOut.String(), "story unavailable") {
+				t.Fatalf("code=%d err=%q", code, errOut.String())
+			}
+		})
+	}
+}
+
+func TestMultiTagFailureReportsPartialApplication(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			_, _ = w.Write([]byte(`{"data":{"gid":"task-1"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"message":"tag rejected"}]}`))
+	}))
+	defer server.Close()
+	errOut := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"tasks", "add-tag", "task-1", "--tag", "tag-1", "--tag", "tag-2"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL})
+	if code != 1 || !strings.Contains(errOut.String(), "tag-2 after applying 1 of 2 tags") {
+		t.Fatalf("code=%d err=%q", code, errOut.String())
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,10 +17,10 @@ import (
 var taskValueFlags = []string{
 	"workspace", "parent", "name", "notes", "html-notes", "assignee", "completed",
 	"approval-status", "resource-subtype", "start-on", "start-at", "due-on", "due-at",
-	"opt-fields", "insert-before", "insert-after",
+	"opt-fields",
 }
 
-var taskRepeatFlags = []string{"follower", "project", "tag", "custom-field", "membership"}
+var taskRepeatFlags = []string{"follower", "project", "tag", "custom-field", "custom-field-json", "membership"}
 
 func extendedAPICmd(kind, sub string, args []string, io *CliIO, rt RuntimeOptions, c *asana.Client, token string) error {
 	switch kind {
@@ -130,27 +131,55 @@ func validateTime(raw, flag string) error {
 	return nil
 }
 
-func parsePairs(values []string, flag string) (asana.Object, error) {
+func parseStringPairs(values []string, flag string) (asana.Object, error) {
 	out := asana.Object{}
 	for _, raw := range values {
 		key, value, ok := strings.Cut(raw, "=")
 		if !ok || key == "" || value == "" {
 			return nil, fmt.Errorf("--%s must use GID=VALUE", flag)
 		}
-		out[key] = scalar(value)
+		out[key] = value
 	}
 	return out, nil
 }
 
-func scalar(raw string) any {
-	var value any
-	if json.Unmarshal([]byte(raw), &value) == nil {
-		switch value.(type) {
-		case nil, bool, float64, string, []any, map[string]any:
-			return value
+func parseJSONPairs(values []string, flag string) (asana.Object, error) {
+	out := asana.Object{}
+	for _, raw := range values {
+		key, value, ok := strings.Cut(raw, "=")
+		if !ok || key == "" || value == "" {
+			return nil, fmt.Errorf("--%s must use GID=JSON", flag)
 		}
+		var decoded any
+		decoder := json.NewDecoder(strings.NewReader(value))
+		decoder.UseNumber()
+		if err := decoder.Decode(&decoded); err != nil {
+			return nil, fmt.Errorf("--%s value for %s must be valid JSON: %w", flag, key, err)
+		}
+		if err := decoder.Decode(&struct{}{}); err != io.EOF {
+			return nil, fmt.Errorf("--%s value for %s must contain one JSON value", flag, key)
+		}
+		out[key] = decoded
 	}
-	return raw
+	return out, nil
+}
+
+func mergeCustomFields(p parsed) (asana.Object, error) {
+	fields, err := parseStringPairs(p.lists["custom-field"], "custom-field")
+	if err != nil {
+		return nil, err
+	}
+	typed, err := parseJSONPairs(p.lists["custom-field-json"], "custom-field-json")
+	if err != nil {
+		return nil, err
+	}
+	for gid, value := range typed {
+		if _, exists := fields[gid]; exists {
+			return nil, fmt.Errorf("custom field %s is specified by both --custom-field and --custom-field-json", gid)
+		}
+		fields[gid] = value
+	}
+	return fields, nil
 }
 
 func taskRequestData(p parsed, create bool) (asana.Object, error) {
@@ -206,8 +235,8 @@ func taskRequestData(p parsed, create bool) (asana.Object, error) {
 			data[field] = p.lists[flag]
 		}
 	}
-	if len(p.lists["custom-field"]) > 0 {
-		fields, err := parsePairs(p.lists["custom-field"], "custom-field")
+	if len(p.lists["custom-field"]) > 0 || len(p.lists["custom-field-json"]) > 0 {
+		fields, err := mergeCustomFields(p)
 		if err != nil {
 			return nil, err
 		}

@@ -75,7 +75,7 @@ func (c *Client) postToken(v url.Values) (config.TokenData, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return config.TokenData{}, decodeError(resp)
+		return config.TokenData{}, fmt.Errorf("token endpoint: %w", decodeError(resp))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
@@ -248,7 +248,11 @@ func (c *Client) doRequestJSON(ctx context.Context, token, method, path string, 
 	if resp.ContentLength == 0 {
 		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	err = json.NewDecoder(resp.Body).Decode(out)
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 func decodeError(resp *http.Response) error {

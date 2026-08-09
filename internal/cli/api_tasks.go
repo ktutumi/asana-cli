@@ -56,6 +56,9 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 		if err != nil {
 			return err
 		}
+		if sub == "create-subtask" && (p.vals["workspace"] != "" || p.vals["parent"] != "") {
+			return fmt.Errorf("create-subtask uses its positional PARENT_GID; --workspace and --parent are not supported")
+		}
 		data, err := taskRequestData(p, sub != "update")
 		if err != nil {
 			return err
@@ -76,8 +79,6 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 				if p.vals["name"] == "" {
 					return fmt.Errorf("--name is required")
 				}
-				delete(data, "workspace")
-				delete(data, "parent")
 				path = resourcePath("tasks", p.pos[0], "subtasks")
 			} else {
 				method = http.MethodPut
@@ -90,7 +91,11 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 		return writeAndRender(ctx, io, rt, c, token, method, path, "task", optFieldsQuery(p.vals["opt-fields"]), data)
 
 	case "set-parent", "unset-parent":
-		p, err := parseFlags(args, []string{"parent", "insert-before", "insert-after"}, nil, nil, 1)
+		valueFlags := []string{"parent", "insert-before", "insert-after"}
+		if sub == "unset-parent" {
+			valueFlags = nil
+		}
+		p, err := parseFlags(args, valueFlags, nil, nil, 1)
 		if err != nil {
 			return err
 		}
@@ -237,16 +242,20 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 			return fmt.Errorf("task gid and at least one --tag are required")
 		}
 		var result asana.Object
-		for _, tag := range p.lists["tag"] {
+		for i, tag := range p.lists["tag"] {
 			result, err = c.WriteObject(ctx, token, http.MethodPost, resourcePath("tasks", p.pos[0], asanaAction(sub)), nil, asana.Object{"tag": tag})
 			if err != nil {
-				return err
+				return fmt.Errorf("%s failed for tag %s after applying %d of %d tags: %w", sub, tag, i, len(p.lists["tag"]), err)
 			}
 		}
 		return render(io.out(), rt.Output, "task", result)
 
 	case "add-project", "remove-project":
-		p, err := parseFlags(args, []string{"project", "section", "insert-before", "insert-after"}, nil, nil, 1)
+		valueFlags := []string{"project", "section", "insert-before", "insert-after"}
+		if sub == "remove-project" {
+			valueFlags = []string{"project"}
+		}
+		p, err := parseFlags(args, valueFlags, nil, nil, 1)
 		if err != nil {
 			return err
 		}

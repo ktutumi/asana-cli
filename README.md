@@ -236,7 +236,10 @@ asana-cli tasks update 789 --completed true
 Task fields include `--notes` / `--html-notes`, `--assignee`, `--completed`,
 `--approval-status`, `--resource-subtype`, `--start-on` / `--start-at`,
 `--due-on` / `--due-at`, repeatable `--follower`, `--project`, `--tag`,
-`--custom-field GID=VALUE`, and `--membership PROJECT_GID=SECTION_GID`.
+`--custom-field GID=STRING`, `--custom-field-json GID=JSON`, and
+`--membership PROJECT_GID=SECTION_GID`. Use `--custom-field` for text and enum
+option GIDs, including numeric-looking GIDs. Use `--custom-field-json` only for
+typed values such as numbers, booleans, arrays, or objects.
 Mutually exclusive body and date forms are validated before an API request.
 Updates send only fields explicitly provided on the command line.
 
@@ -263,8 +266,12 @@ asana-cli tasks get-custom-id OPS-42 --workspace 123
 Use `--opt-fields` on list, search, and get-custom-id commands to request
 additional fields. Workspace task search requires Asana Premium, is eventually
 consistent, and does not support the normal offset pagination used by list
-commands. `--limit` accepts at most 100 items. To page manually, sort by creation
-time and narrow each subsequent query so it excludes items already processed.
+commands. Filters include `--assignee`, `--projects-any`, `--sections-any`,
+`--tags-any`, `--text`, `--completed`, `--is-subtask`, `--modified-at-after`,
+`--due-on-before` / `--due-on-after`, `--start-on-before` / `--start-on-after`,
+`--sort-by`, and `--sort-ascending`. `--limit` accepts at most 100 items. To page
+manually, sort by creation time and narrow each subsequent query so it excludes
+items already processed.
 
 ### Manage sections and project placement
 
@@ -301,14 +308,16 @@ asana-cli tasks add-followers 789 --follower 555 --follower 666
 Only comment stories can be edited. `--text` and `--html-text` are mutually
 exclusive. Relationship GIDs are repeatable where Asana supports a batch body;
 API limit errors, including the combined dependency/dependent limit, are
-reported using Asana's error message.
+reported using Asana's error message. Repeated `add-tag` and `remove-tag`
+operations use one request per tag and are not atomic. On failure, the error
+reports the failing tag and how many preceding tags were already applied.
 
 ### Manage projects and memberships
 
 ```bash
 asana-cli projects get 123
-asana-cli projects create --workspace 456 --name "Launch"
-asana-cli projects update 123 --privacy-setting private
+asana-cli projects create --workspace 456 --name "Launch" --icon rocket --default-view list
+asana-cli projects update 123 --privacy-setting private --default-access-level editor
 asana-cli projects tasks 123
 asana-cli tasks projects 789
 asana-cli workspaces projects 456
@@ -321,11 +330,15 @@ asana-cli memberships update 789 --access-level commenter
 asana-cli memberships delete 789
 asana-cli projects add-followers 123 --follower 456
 asana-cli projects task-counts 123
+asana-cli projects duplicate 123 --name "Launch copy" --start-on 2026-09-01 --skip-weekends true
 ```
 
 New project sharing should use memberships instead of the deprecated `team`
 field. Membership members may be users or teams. Project task-count requests
 have an additional Asana rate/cost limit, so avoid polling them frequently.
+Project create/update also support repeatable `--custom-field GID=STRING` and
+`--custom-field-json GID=JSON` values. When duplicate shifts `--start-on` or
+`--due-on`, `--skip-weekends true|false` is required.
 
 ### Attachments
 
@@ -337,7 +350,7 @@ support projects and project briefs:
 asana-cli attachments list 789
 asana-cli attachments get 123
 asana-cli attachments upload --parent 789 --file ./report.pdf
-asana-cli attachments upload --parent 789 --url https://example.com/report --name "Report"
+asana-cli attachments upload --parent 789 --url https://example.com/report --name "Report" --connect-to-app
 asana-cli attachments delete 123
 ```
 

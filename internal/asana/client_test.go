@@ -152,6 +152,26 @@ func TestTokenResponseDecodeErrorDoesNotIncludeBody(t *testing.T) {
 	}
 }
 
+func TestTokenEndpointErrorIncludesContextWithoutBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`unexpected-secret-bearing-body`))
+	}))
+	defer ts.Close()
+
+	c := asana.NewClient("", ts.URL)
+	_, err := c.RefreshAccessToken(context.Background(), "cid", "secret", "refresh")
+	if err == nil {
+		t.Fatal("expected token endpoint error")
+	}
+	if !strings.Contains(err.Error(), "token endpoint: http 400") {
+		t.Fatalf("missing token endpoint context: %v", err)
+	}
+	if strings.Contains(err.Error(), "secret-bearing") {
+		t.Fatalf("token response body leaked: %v", err)
+	}
+}
+
 func TestUnrecognizedAPIErrorDoesNotIncludeBody(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -280,6 +300,22 @@ func TestAsanaErrorEnvelopeJoinsMessages(t *testing.T) {
 		t.Fatal("expected error")
 	} else if !strings.Contains(err.Error(), "first; second") {
 		t.Fatalf("unexpected error %v", err)
+	}
+}
+
+func TestSuccessfulEmptyChunkedResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Transfer-Encoding", "chunked")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	result, err := asana.NewClient(ts.URL+"/", "").WriteObject(context.Background(), "token", http.MethodPost, "tasks", nil, map[string]any{"name": "test"})
+	if err != nil {
+		t.Fatalf("empty successful response: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("result=%#v, want nil", result)
 	}
 }
 

@@ -43,8 +43,8 @@ func projectRequestData(p parsed) (asana.Object, error) {
 	if len(p.lists["follower"]) > 0 {
 		data["followers"] = strings.Join(p.lists["follower"], ",")
 	}
-	if len(p.lists["custom-field"]) > 0 {
-		fields, err := parsePairs(p.lists["custom-field"], "custom-field")
+	if len(p.lists["custom-field"]) > 0 || len(p.lists["custom-field-json"]) > 0 {
+		fields, err := mergeCustomFields(p)
 		if err != nil {
 			return nil, err
 		}
@@ -75,7 +75,7 @@ func projectsExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions
 		if sub == "update" {
 			max = 1
 		}
-		p, err := parseFlags(args, projectValueFlags, []string{"follower", "custom-field"}, nil, max)
+		p, err := parseFlags(args, projectValueFlags, []string{"follower", "custom-field", "custom-field-json"}, nil, max)
 		if err != nil {
 			return err
 		}
