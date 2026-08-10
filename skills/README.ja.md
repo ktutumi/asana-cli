@@ -11,11 +11,11 @@
 
 含まれる Skill:
 - `asana-cli-operator/`
-  - `asana-cli` を使って認証状態の確認、workspace / project / task / comment / attachment 取得、token refresh などを行うための運用 Skill
+  - `asana-cli` を使って認証し、workspace / project / task / comment / attachment / membership などを安全に参照・操作するための運用 Skill
 
 使い分け:
 - CLI 自体を実装・修正する場合は、コードとテストを読む
-- CLI を実際に使って確認・取得する場合は、このディレクトリの Skill を使う
+- CLI を実際に使って確認・操作する場合は、このディレクトリの Skill を使う
 
 現在の構成:
 ```text

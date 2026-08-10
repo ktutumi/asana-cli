@@ -11,11 +11,11 @@ Goals:
 
 Included skills:
 - `asana-cli-operator/`
-  - An operational skill for using `asana-cli` to check authentication status, fetch workspaces / projects / tasks / comments / attachments, and refresh tokens
+  - An operational skill for using `asana-cli` to authenticate and safely read or manage workspaces, projects, tasks, comments, attachments, memberships, and related resources
 
 How to use them:
 - If you are implementing or modifying the CLI itself, read the code and tests
-- If you are actually using the CLI to inspect or fetch data, use the skills in this directory
+- If you are actually using the CLI to inspect or manage data, use the skills in this directory
 
 Current structure:
 ```text

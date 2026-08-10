@@ -406,7 +406,7 @@ AI Agent からこの CLI を扱うための Skill は `skills/` に置いてい
 
 現在含まれるもの:
 - `skills/asana-cli-operator/`
-  - `asana-cli` の運用 Skill。認証状態確認、workspace / project / task / comment / attachment の取得、token refresh、出力形式の使い分けを定義しています。
+  - `asana-cli` の運用 Skill。認証、Asana resource の安全な参照・操作、custom field 値の扱い、token refresh、出力形式の使い分けを定義しています。
   - 本体: `skills/asana-cli-operator/SKILL.md`
 
 詳細は `skills/README.md` を参照してください。

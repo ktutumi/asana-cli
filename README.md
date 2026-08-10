@@ -415,7 +415,7 @@ Skills for AI agents operating this CLI live under `skills/`.
 
 Currently included:
 - `skills/asana-cli-operator/`
-  - An operational skill for `asana-cli`. It defines how to check authentication status, fetch workspaces / projects / tasks / comments / attachments, refresh tokens, and choose output formats.
+  - An operational skill for `asana-cli`. It defines how to authenticate, safely read or manage Asana resources, handle custom-field values, refresh tokens, and choose output formats.
   - Main file: `skills/asana-cli-operator/SKILL.md`
 
 See `skills/README.md` for details.
