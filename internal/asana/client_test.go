@@ -101,8 +101,8 @@ func TestTokenResponseMissingAccessTokenFails(t *testing.T) {
 	if !strings.Contains(err.Error(), "token response missing access_token") {
 		t.Fatalf("expected error to contain 'token response missing access_token', got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "{\"token_type\":\"Bearer\"}") {
-		t.Fatalf("expected error to contain raw response body, got: %v", err)
+	if strings.Contains(err.Error(), "Bearer") {
+		t.Fatalf("token response body leaked: %v", err)
 	}
 }
 
@@ -133,7 +133,7 @@ func TestTokenResponseWithDataWrapperPreservesTopLevelTokens(t *testing.T) {
 	}
 }
 
-func TestTokenResponseDecodeErrorIncludesBody(t *testing.T) {
+func TestTokenResponseDecodeErrorDoesNotIncludeBody(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
@@ -147,8 +147,44 @@ func TestTokenResponseDecodeErrorIncludesBody(t *testing.T) {
 	if !strings.Contains(err.Error(), "token response decode:") {
 		t.Fatalf("expected error to contain 'token response decode:', got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not json") {
-		t.Fatalf("expected error to contain raw response body 'not json', got: %v", err)
+	if strings.Contains(err.Error(), "not json") {
+		t.Fatalf("token response body leaked: %v", err)
+	}
+}
+
+func TestTokenEndpointErrorIncludesContextWithoutBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`unexpected-secret-bearing-body`))
+	}))
+	defer ts.Close()
+
+	c := asana.NewClient("", ts.URL)
+	_, err := c.RefreshAccessToken(context.Background(), "cid", "secret", "refresh")
+	if err == nil {
+		t.Fatal("expected token endpoint error")
+	}
+	if !strings.Contains(err.Error(), "token endpoint: http 400") {
+		t.Fatalf("missing token endpoint context: %v", err)
+	}
+	if strings.Contains(err.Error(), "secret-bearing") {
+		t.Fatalf("token response body leaked: %v", err)
+	}
+}
+
+func TestUnrecognizedAPIErrorDoesNotIncludeBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`unexpected-secret-bearing-body`))
+	}))
+	defer ts.Close()
+
+	_, err := asana.NewClient(ts.URL, "").FetchMe(context.Background(), "token")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if strings.Contains(err.Error(), "secret-bearing") {
+		t.Fatalf("response body leaked: %v", err)
 	}
 }
 
@@ -267,10 +303,29 @@ func TestAsanaErrorEnvelopeJoinsMessages(t *testing.T) {
 	}
 }
 
+func TestSuccessfulEmptyChunkedResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Transfer-Encoding", "chunked")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	result, err := asana.NewClient(ts.URL+"/", "").WriteObject(context.Background(), "token", http.MethodPost, "tasks", nil, map[string]any{"name": "test"})
+	if err != nil {
+		t.Fatalf("empty successful response: %v", err)
+	}
+	if result != nil {
+		t.Fatalf("result=%#v, want nil", result)
+	}
+}
+
 func TestListAttachments(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/tasks/task-1/attachments" {
+		if r.URL.Path != "/attachments" {
 			t.Fatalf("path=%s", r.URL.Path)
+		}
+		if r.URL.Query().Get("parent") != "task-1" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
 		}
 		_, _ = w.Write([]byte(`{"data":[{"gid":"a1"}]}`))
 	}))

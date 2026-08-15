@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -237,12 +238,28 @@ func dispatch(args []string, io *CliIO, rt RuntimeOptions) error {
 		return apiCmd("tasks", args[1:], io, rt)
 	case "sections":
 		return apiCmd("sections", args[1:], io, rt)
+	case "stories":
+		return apiCmd("stories", args[1:], io, rt)
+	case "attachments":
+		return apiCmd("attachments", args[1:], io, rt)
+	case "memberships":
+		return apiCmd("memberships", args[1:], io, rt)
+	case "jobs":
+		return apiCmd("jobs", args[1:], io, rt)
+	case "teams":
+		return apiCmd("teams", args[1:], io, rt)
 	default:
 		return fmt.Errorf("unknown command: %s", args[0])
 	}
 }
 
-func client(rt RuntimeOptions) *asana.Client { return asana.NewClient(rt.APIBase, rt.TokenEndpoint) }
+func client(rt RuntimeOptions) *asana.Client {
+	c := asana.NewClient(rt.APIBase, rt.TokenEndpoint)
+	if hc, ok := rt.HTTPClient.(*http.Client); ok && hc != nil {
+		c.HTTPClient = hc
+	}
+	return c
+}
 
 const tokenRefreshBuffer = 5 * time.Minute
 
@@ -513,7 +530,7 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		return render(io.out(), rt.Output, "workspaces", v)
 	case "projects:list":
-		p, err := parseFlags(args, []string{"workspace"}, nil, nil, 1)
+		p, err := parseFlags(args, []string{"workspace", "opt-fields"}, nil, nil, 1)
 		if err != nil {
 			return err
 		}
@@ -521,25 +538,17 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		if err != nil {
 			return err
 		}
-		v, err := c.ListProjects(context.Background(), tok, values("workspace", w))
+		q := listOptFieldsQuery(rt.Output, "projects", p.vals["opt-fields"])
+		if w != "" {
+			q.Set("workspace", w)
+		}
+		v, err := c.ListProjects(context.Background(), tok, q)
 		if err != nil {
 			return err
 		}
 		return render(io.out(), rt.Output, "projects", v)
 	case "tasks:list":
-		p, err := parseFlags(args, []string{"project"}, nil, nil, 1)
-		if err != nil {
-			return err
-		}
-		pr, err := target(p, "project")
-		if err != nil {
-			return err
-		}
-		v, err := c.ListTasks(context.Background(), tok, values("project", pr))
-		if err != nil {
-			return err
-		}
-		return render(io.out(), rt.Output, "tasks", v)
+		return tasksListCmd(args, io, rt, c, tok)
 	case "sections:list":
 		p, err := parseFlags(args, []string{"project"}, nil, nil, 1)
 		if err != nil {
@@ -558,7 +567,11 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		return render(io.out(), rt.Output, "sections", v)
 	case "tasks:get", "tasks:subtasks", "tasks:stories", "tasks:comments", "tasks:attachments":
-		p, err := parseFlags(args, []string{"task"}, nil, nil, 1)
+		valueFlags := []string{"task"}
+		if sub == "subtasks" || sub == "attachments" {
+			valueFlags = append(valueFlags, "opt-fields")
+		}
+		p, err := parseFlags(args, valueFlags, nil, nil, 1)
 		if err != nil {
 			return err
 		}
@@ -578,20 +591,22 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		var v []asana.Object
 		if sub == "subtasks" {
-			v, err = c.ListSubtasks(context.Background(), tok, gid)
+			v, err = c.ListObjects(context.Background(), tok, resourcePath("tasks", gid, "subtasks"), listOptFieldsQuery(rt.Output, "subtasks", p.vals["opt-fields"]))
 		} else if sub == "stories" {
 			v, err = c.ListStories(context.Background(), tok, gid)
 		} else if sub == "comments" {
 			v, err = c.ListComments(context.Background(), tok, gid)
 		} else {
-			v, err = c.ListAttachments(context.Background(), tok, gid)
+			q := listOptFieldsQuery(rt.Output, "attachments", p.vals["opt-fields"])
+			q.Set("parent", gid)
+			v, err = c.ListObjects(context.Background(), tok, "attachments", q)
 		}
 		if err != nil {
 			return err
 		}
 		return render(io.out(), rt.Output, sub, v)
 	}
-	return fmt.Errorf("unknown command")
+	return extendedAPICmd(kind, sub, args, io, rt, c, tok)
 }
 
 func tokenOutput(format string) string {
@@ -658,7 +673,7 @@ func openURL(rt RuntimeOptions, u string) error {
 	}
 }
 
-var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "sections": {"gid", "name"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
+var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "project": {"gid", "name", "archived", "privacy_setting", "workspace.name"}, "sections": {"gid", "name"}, "section": {"gid", "name", "project.gid"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "story": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "attachment": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "memberships": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "membership": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "job": {"gid", "status", "new_project.gid", "new_task.gid", "new_project_template.gid"}, "result": {"deleted", "gid", "resource_type"}, "task_counts": {"num_tasks", "num_incomplete_tasks", "num_completed_tasks", "num_milestones", "num_incomplete_milestones", "num_completed_milestones"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
 
 func render(w io.Writer, format, typ string, data any) error {
 	if format == "json" {
@@ -773,10 +788,11 @@ func guessCols(d any) []string {
 }
 
 func rootHelp() string {
-	return `asana-cli - Asana OAuth and read-only API CLI
+	return `asana-cli - Asana OAuth and API CLI
 
   Primary commands:
-  auth, me, workspaces, projects, sections, tasks
+  auth, me, workspaces, teams, projects, sections, tasks, stories,
+  attachments, memberships, jobs
 
 Usage:
   asana-cli [--config PATH] [--output json|table|compact] <command>
@@ -784,10 +800,15 @@ Usage:
 Commands:
   auth        OAuth authentication commands
   me          Show current user
-  workspaces  List workspaces
-  projects    List projects
-  sections    List sections in a project
-  tasks       List and inspect tasks
+  workspaces  List workspaces and manage workspace projects
+  teams       Manage team projects
+  projects    Manage projects
+  sections    Manage sections and task placement
+  tasks       Manage tasks, relations, and comments
+  stories     Get, update, or delete stories
+  attachments List, upload, inspect, or delete attachments
+  memberships Manage project memberships
+  jobs        Inspect asynchronous jobs
 
 Global flags:
   --config PATH      Credentials file path
@@ -797,5 +818,121 @@ Global flags:
 `
 }
 func commandHelp(cmd string) string {
-	return "Usage: asana-cli " + cmd + " [options]\n\nRun with valid subcommands and flags.\n"
+	help := map[string]string{
+		"tasks": `Usage: asana-cli tasks <subcommand> [options]
+
+Read:
+  list --project|--section|--tag|--user-task-list GID [--opt-fields FIELDS]
+  get TASK_GID | subtasks TASK_GID [--opt-fields FIELDS] | stories TASK_GID | comments TASK_GID
+  attachments TASK_GID [--opt-fields FIELDS] | projects TASK_GID [--opt-fields FIELDS]
+  dependencies TASK_GID | dependents TASK_GID
+  search --workspace GID [filters] [--limit N] [--opt-fields FIELDS]
+  get-custom-id CUSTOM_ID --workspace GID
+
+Write:
+  create --name NAME (--workspace GID|--parent GID|--project GID|--membership PROJECT=SECTION)
+  create-subtask PARENT_GID --name NAME [task fields]
+  update TASK_GID [task fields]
+  set-parent TASK_GID --parent GID [--insert-before GID|--insert-after GID]
+  unset-parent TASK_GID
+  comment TASK_GID (--text TEXT|--html-text HTML)
+  add-project|remove-project TASK_GID --project GID
+  add-dependencies|remove-dependencies TASK_GID --dependency GID...
+  add-dependents|remove-dependents TASK_GID --dependent GID...
+  add-tag|remove-tag TASK_GID --tag GID...
+  add-followers|remove-followers TASK_GID --follower GID...
+  duplicate TASK_GID [--name NAME] [--include FIELDS]
+  delete TASK_GID
+
+Task fields include --notes/--html-notes, --assignee, --completed true|false,
+--approval-status, --resource-subtype, --start-on/--start-at, --due-on/--due-at,
+repeatable --follower, --project, --tag, --custom-field GID=STRING,
+--custom-field-json GID=JSON, and --membership PROJECT_GID=SECTION_GID.
+
+Search requires Asana Premium. Results are eventually consistent and do not
+support normal offset pagination; --limit accepts at most 100 items. Filters
+include --assignee, --projects-any, --sections-any, --tags-any, --text,
+--completed, --is-subtask, --modified-at-after, --due-on-before/--due-on-after,
+--start-on-before/--start-on-after, --sort-by, and --sort-ascending.
+Deleted tasks remain in the deleting user's Asana trash and can be recovered
+for 30 days; afterward Asana removes them permanently.
+`,
+		"projects": `Usage: asana-cli projects <subcommand> [options]
+
+  list [WORKSPACE_GID] [--opt-fields FIELDS]
+  get PROJECT_GID
+  create --workspace GID --name NAME [project fields]
+  update PROJECT_GID [project fields]
+  tasks PROJECT_GID [--opt-fields FIELDS]
+  task-counts PROJECT_GID
+  add-followers|remove-followers PROJECT_GID --follower GID...
+  duplicate PROJECT_GID --name NAME [--include FIELDS]
+    [(--start-on DATE|--due-on DATE) --skip-weekends true|false]
+  save-as-template PROJECT_GID --name NAME --public true|false [--team GID|--workspace GID]
+  delete PROJECT_GID
+
+Project fields include --notes/--html-notes, --color, --icon, --default-view,
+--privacy-setting, --archived true|false, --owner, --start-on, --due-on,
+--default-access-level, repeatable --follower, --custom-field GID=STRING, and
+--custom-field-json GID=JSON.
+Task-count requests have an additional Asana rate/cost limit.
+`,
+		"sections": `Usage: asana-cli sections <subcommand> [options]
+
+  list PROJECT_GID | get SECTION_GID
+  create --project GID --name NAME [--insert-before GID|--insert-after GID]
+  update SECTION_GID --name NAME
+  tasks SECTION_GID [--opt-fields FIELDS]
+  add-task SECTION_GID --task GID [--insert-before GID|--insert-after GID]
+  move SECTION_GID --project GID [--before-section GID|--after-section GID]
+  delete SECTION_GID
+
+Asana only permits deleting an empty section and does not permit deleting the
+last section in a project.
+`,
+		"stories": `Usage: asana-cli stories get|update|delete STORY_GID [options]
+
+Only comment stories can be updated. Use exactly one of --text or --html-text.
+`,
+		"attachments": `Usage: asana-cli attachments <subcommand> [options]
+
+  list PARENT_GID [--opt-fields FIELDS]
+  get ATTACHMENT_GID
+  upload --parent GID --file PATH
+  upload --parent GID --url URL --name NAME [--connect-to-app]
+  delete ATTACHMENT_GID
+
+Parents may be tasks, projects, or project briefs. File uploads are limited to
+100MB. Non-ASCII filenames are sent as UTF-8 multipart filenames.
+`,
+		"memberships": `Usage: asana-cli memberships <subcommand> [options]
+
+  list (--parent GID|--member GID) [--opt-fields FIELDS]
+  get MEMBERSHIP_GID
+  create --parent PROJECT_GID --member USER_OR_TEAM_GID [--access-level LEVEL]
+  update MEMBERSHIP_GID --access-level LEVEL
+  delete MEMBERSHIP_GID
+`,
+		"jobs": `Usage: asana-cli jobs get JOB_GID
+
+Use this command to inspect the job GID returned by duplicate and
+save-as-template operations.
+`,
+		"workspaces": `Usage: asana-cli workspaces list
+       asana-cli workspaces projects WORKSPACE_GID [--opt-fields FIELDS]
+       asana-cli workspaces create-project WORKSPACE_GID --name NAME
+`,
+		"teams": `Usage: asana-cli teams projects TEAM_GID [--opt-fields FIELDS]
+       asana-cli teams create-project TEAM_GID --name NAME
+`,
+	}
+	if text, ok := help[cmd]; ok {
+		return text
+	}
+	if parent, _, ok := strings.Cut(cmd, " "); ok {
+		if text, exists := help[parent]; exists {
+			return text
+		}
+	}
+	return "Usage: asana-cli " + cmd + " [options]\n"
 }

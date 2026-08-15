@@ -2,7 +2,7 @@
 
 Language: English | [日本語](README.ja.md)
 
-A personal Asana OAuth CLI written in Go, structured for distributing macOS and Linux binaries through GitHub Releases.
+A personal Asana OAuth and API CLI written in Go, structured for distributing macOS and Linux binaries through GitHub Releases.
 
 Key features:
 - Generate an authorization URL with `auth url`
@@ -12,9 +12,10 @@ Key features:
 - Refresh the access token with a refresh token via `auth refresh`
 - `me`
 - `workspaces list`
-- `projects list` / `project list`
-- `sections list`
-- `tasks list|get|subtasks|stories|comments|attachments`
+- Read and write tasks, subtasks, projects, sections, comments, memberships, and relationships
+- Search tasks and resolve custom IDs
+- Upload files or external URL attachments
+- Duplicate and delete resources, save project templates, and inspect asynchronous jobs
 
 Security and UX policy:
 - Prefer the XDG Base Directory for the config file (`$XDG_CONFIG_HOME/asana-cli/credentials.json`)
@@ -221,6 +222,162 @@ Notes:
 - `tasks comments` extracts only `comment_added` stories and includes `text` / `html_text` / `created_at` / `created_by.name`, which are needed to display the comment body.
 - If you need the actual comment text, prefer `tasks comments`.
 
+### Manage tasks and subtasks
+
+Create a task from a workspace, project, parent task, or project/section membership. `--membership` alone is enough; the CLI also sends the membership project so Asana accepts the request:
+
+```bash
+asana-cli tasks create --workspace 123 --name "Prepare launch" --due-on 2026-08-31
+asana-cli tasks create --project 456 --name "Review copy" --follower 111 --tag 222
+asana-cli tasks create --name "In progress item" --membership 456=123
+asana-cli tasks create-subtask 789 --name "Check links"
+asana-cli tasks update 789 --completed true
+```
+
+Task fields include `--notes` / `--html-notes`, `--assignee`, `--completed`,
+`--approval-status`, `--resource-subtype`, `--start-on` / `--start-at`,
+`--due-on` / `--due-at`, repeatable `--follower`, `--project`, `--tag`,
+`--custom-field GID=STRING`, `--custom-field-json GID=JSON`, and
+`--membership PROJECT_GID=SECTION_GID`. Use `--custom-field` for text and enum
+option GIDs, including numeric-looking GIDs. Use `--custom-field-json` only for
+typed values such as numbers, booleans, arrays, or objects.
+Mutually exclusive body and date forms are validated before an API request.
+Updates send only fields explicitly provided on the command line.
+
+Change or remove a parent:
+
+```bash
+asana-cli tasks set-parent 789 --parent 123 --insert-after 456
+asana-cli tasks unset-parent 789
+```
+
+### List and search tasks
+
+Exactly one list context is required:
+
+```bash
+asana-cli tasks list --project 123
+asana-cli tasks list --section 234
+asana-cli tasks list --tag 345
+asana-cli tasks list --user-task-list 456
+asana-cli tasks search --workspace 123 --assignee me --projects-any 456,789 --sort-by due_date --limit 50
+asana-cli tasks get-custom-id OPS-42 --workspace 123
+```
+
+Use `--opt-fields` on list, search, and get-custom-id commands to request
+additional fields. For `table` and `compact` output, list commands also request
+the default display columns so those fields are not blank. JSON output does not
+add those columns unless you pass `--opt-fields`. Workspace task search requires Asana Premium, is eventually
+consistent, and does not support the normal offset pagination used by list
+commands. Filters include `--assignee`, `--projects-any`, `--sections-any`,
+`--tags-any`, `--text`, `--completed`, `--is-subtask`, `--modified-at-after`,
+`--due-on-before` / `--due-on-after`, `--start-on-before` / `--start-on-after`,
+`--sort-by`, and `--sort-ascending`. `--limit` accepts at most 100 items. To page
+manually, sort by creation time and narrow each subsequent query so it excludes
+items already processed.
+
+### Manage sections and project placement
+
+```bash
+asana-cli sections get 123
+asana-cli sections create --project 456 --name "In progress"
+asana-cli sections update 123 --name "Doing"
+asana-cli sections tasks 123
+asana-cli sections add-task 123 --task 789
+asana-cli sections move 123 --project 456 --after-section 111
+asana-cli tasks add-project 789 --project 456 --section 123
+asana-cli tasks remove-project 789 --project 456
+```
+
+`--insert-before` and `--insert-after` (and the equivalent section move flags)
+cannot be combined. Asana only permits deleting an empty section and does not
+permit deleting the last section in a project.
+
+### Manage comments and task relationships
+
+```bash
+asana-cli tasks comment 789 --text "Ready for review"
+asana-cli stories get 123
+asana-cli stories update 123 --text "Updated comment"
+asana-cli stories delete 123
+asana-cli tasks dependencies 789
+asana-cli tasks add-dependencies 789 --dependency 111 --dependency 222
+asana-cli tasks remove-dependencies 789 --dependency 111
+asana-cli tasks add-dependents 789 --dependent 333
+asana-cli tasks add-tag 789 --tag 444
+asana-cli tasks add-followers 789 --follower 555 --follower 666
+```
+
+Only comment stories can be edited. `--text` and `--html-text` are mutually
+exclusive. Relationship GIDs are repeatable where Asana supports a batch body;
+API limit errors, including the combined dependency/dependent limit, are
+reported using Asana's error message. Repeated `add-tag` and `remove-tag`
+operations use one request per tag and are not atomic. On failure, the error
+reports the failing tag and how many preceding tags were already applied.
+
+### Manage projects and memberships
+
+```bash
+asana-cli projects get 123
+asana-cli projects create --workspace 456 --name "Launch" --icon rocket --default-view list
+asana-cli projects update 123 --privacy-setting private --default-access-level editor
+asana-cli projects tasks 123
+asana-cli tasks projects 789
+asana-cli workspaces projects 456
+asana-cli workspaces create-project 456 --name "Workspace project"
+asana-cli teams projects 789
+asana-cli teams create-project 789 --name "Team project"
+asana-cli memberships create --parent 123 --member 456 --access-level editor
+asana-cli memberships list --parent 123
+asana-cli memberships update 789 --access-level commenter
+asana-cli memberships delete 789
+asana-cli projects add-followers 123 --follower 456
+asana-cli projects task-counts 123
+asana-cli projects duplicate 123 --name "Launch copy" --start-on 2026-09-01 --skip-weekends true
+```
+
+New project sharing should use memberships instead of the deprecated `team`
+field. Membership members may be users or teams. Project task-count requests
+have an additional Asana rate/cost limit, so avoid polling them frequently.
+Project create/update also support repeatable `--custom-field GID=STRING` and
+`--custom-field-json GID=JSON` values. When duplicate shifts `--start-on` or
+`--due-on`, `--skip-weekends true|false` is required.
+
+### Attachments
+
+The existing `tasks attachments TASK_GID` command is retained and now uses the
+official `GET /attachments?parent=...` route. The parent-oriented commands also
+support projects and project briefs:
+
+```bash
+asana-cli attachments list 789
+asana-cli attachments get 123
+asana-cli attachments upload --parent 789 --file ./report.pdf
+asana-cli attachments upload --parent 789 --url https://example.com/report --name "Report" --connect-to-app
+asana-cli attachments delete 123
+```
+
+File uploads are limited to 100MB. Non-ASCII filenames are sent as UTF-8
+multipart filenames. Local file content and access tokens are never included in
+CLI output or API error text.
+
+### Duplicate, template, delete, and jobs
+
+```bash
+asana-cli tasks duplicate 789 --name "Copy of task"
+asana-cli projects duplicate 123 --name "Copy of project"
+asana-cli projects save-as-template 123 --name "Launch template" --public false --workspace 456
+asana-cli jobs get JOB_GID
+asana-cli tasks delete 789
+asana-cli sections delete 123
+asana-cli projects delete 456
+```
+
+Duplicate and save-as-template commands return a job GID. Use `jobs get` to
+inspect success or failure; the CLI does not poll indefinitely. Deleted tasks
+remain in the deleting user's Asana trash and can be recovered for 30 days;
+afterward Asana removes them permanently.
+
 ## Config file
 
 Default paths:
@@ -253,7 +410,7 @@ Override the path with `--config /path/to/credentials.json`.
 
 ### Automatic token refresh
 
-If `ASANA_CLIENT_SECRET` is set, API commands (`me`, `workspaces`, `projects`, `sections`, `tasks`) automatically refresh the saved access token before making requests when it is expired or within 5 minutes of expiration. The refreshed token is saved back to the config file. If the token cannot be refreshed, the command exits with an error instead of making the API call.
+If `ASANA_CLIENT_SECRET` is set, all API commands automatically refresh the saved access token before making requests when it is expired or within 5 minutes of expiration. The refreshed token is saved back to the config file. If the token cannot be refreshed, the command exits with an error instead of making the API call.
 
 ## Skills
 
@@ -261,7 +418,7 @@ Skills for AI agents operating this CLI live under `skills/`.
 
 Currently included:
 - `skills/asana-cli-operator/`
-  - An operational skill for `asana-cli`. It defines how to check authentication status, fetch workspaces / projects / tasks / comments / attachments, refresh tokens, and choose output formats.
+  - An operational skill for `asana-cli`. It defines how to authenticate, safely read or manage Asana resources, handle custom-field values, refresh tokens, and choose output formats.
   - Main file: `skills/asana-cli-operator/SKILL.md`
 
 See `skills/README.md` for details.

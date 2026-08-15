@@ -4,7 +4,7 @@
     {
       "id": 1,
       "prompt": "Use `asana-cli` to check the current authentication state and tell me what I should do next. Run the real command if needed.",
-      "expected_output": "Starts with `auth status`, then recommends the next step based on config path and token presence. If authenticated, it suggests likely next commands. If unauthenticated, it points to login or the manual flow.",
+      "expected_output": "Starts with `auth status`, then recommends the next step based on the saved client ID, redirect URI, token presence, and expiry. If authenticated, it suggests likely next commands. If unauthenticated, it points to login or the manual flow.",
       "files": []
     },
     {
@@ -16,7 +16,19 @@
     {
       "id": 3,
       "prompt": "In this repository checkout, inspect the current `asana-cli` implementation's `auth login --help` UX and summarize the key points. Use the current source tree, not an installed binary.",
-      "expected_output": "Uses `cargo run -- auth login --help` inside the repo to validate the current source tree and summarizes the localhost redirect restriction and examples.",
+      "expected_output": "Uses `go run ./cmd/asana-cli auth login --help` inside the repo to validate the current source tree, then checks the current README or source for the localhost-only redirect restriction and examples instead of attributing details to the one-line help output.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Update task 120000000000999 so enum custom field 120000000000060 uses option GID 120000000000070. Tell me the exact `asana-cli` command and whether the JSON form should be used.",
+      "expected_output": "Uses `--custom-field 120000000000060=120000000000070`, explicitly avoids `--custom-field-json` for the numeric-looking enum option GID, and does not execute the live update without confirming the user's requested write scope.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "Use the current source checkout to show the supported task commands and verify it builds. Do not call Asana.",
+      "expected_output": "Uses `go run ./cmd/asana-cli tasks --help` and a credential-free Go build or test command from the repository root, reports observed output, and does not call the real Asana API.",
       "files": []
     }
   ]
