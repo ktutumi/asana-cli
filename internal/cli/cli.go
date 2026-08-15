@@ -19,6 +19,7 @@ import (
 	"github.com/ktutumi/asana-cli-go/internal/asana"
 	"github.com/ktutumi/asana-cli-go/internal/config"
 	"github.com/ktutumi/asana-cli-go/internal/oauth"
+	"github.com/ktutumi/asana-cli-go/skills/asana-cli-operator"
 )
 
 const Version = "0.1.0"
@@ -92,6 +93,10 @@ func RunCLI(args []string, io *CliIO, rt RuntimeOptions) (code int) {
 		fmt.Fprintln(io.out(), Version)
 		return 0
 	}
+	if rest[0] == "--skill" {
+		fmt.Fprint(io.out(), skill.Markdown)
+		return 0
+	}
 	if len(rest) > 1 && (rest[1] == "--help" || rest[1] == "-h") {
 		fmt.Fprint(io.out(), commandHelp(rest[0]))
 		return 0
@@ -121,7 +126,7 @@ func parseGlobal(args []string, rt RuntimeOptions) (RuntimeOptions, []string, er
 			break
 		}
 		switch {
-		case a == "--help" || a == "-h" || a == "--version" || a == "-V":
+		case a == "--help" || a == "-h" || a == "--version" || a == "-V" || a == "--skill":
 			rest = append(rest, args[i:]...)
 			return out, rest, nil
 		case a == "--config":
@@ -815,6 +820,7 @@ Global flags:
   --output FORMAT    json, table, or compact
   --help, -h         Show help
   --version, -V      Show version
+  --skill            Print the embedded asana-cli-operator Agent Skill (SKILL.md)
 `
 }
 func commandHelp(cmd string) string {
