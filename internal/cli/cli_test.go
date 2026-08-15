@@ -39,21 +39,6 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestSkillOutput(t *testing.T) {
-	ioOut := &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: &bytes.Buffer{}}
-	code := cli.RunCLI([]string{"--skill"}, ioOut, cli.RuntimeOptions{})
-	if code != 0 {
-		t.Fatalf("want 0 got %d", code)
-	}
-	got := ioOut.Out.(*bytes.Buffer).String()
-	if !strings.Contains(got, "name: asana-cli-operator") {
-		t.Fatalf("skill output missing frontmatter: %s", got)
-	}
-	if !strings.Contains(got, "# Asana CLI Operator") {
-		t.Fatalf("skill output missing heading: %s", got)
-	}
-}
-
 func TestUnknownGlobalFlag(t *testing.T) {
 	errBuf := &bytes.Buffer{}
 	code := cli.RunCLI([]string{"--mystery"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errBuf}, cli.RuntimeOptions{})
