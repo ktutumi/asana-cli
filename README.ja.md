@@ -224,11 +224,12 @@ asana-cli tasks attachments 789
 
 ### task と subtask を操作する
 
-workspace、project、親 task、または project/section membership を指定して task を作成できます。
+workspace、project、親 task、または project/section membership を指定して task を作成できます。`--membership` だけでも作成でき、CLI は membership の project も送るので Asana がリクエストを受け付けます。
 
 ```bash
 asana-cli tasks create --workspace 123 --name "リリース準備" --due-on 2026-08-31
 asana-cli tasks create --project 456 --name "文面レビュー" --follower 111 --tag 222
+asana-cli tasks create --name "進行中の項目" --membership 456=123
 asana-cli tasks create-subtask 789 --name "リンク確認"
 asana-cli tasks update 789 --completed true
 ```
@@ -261,6 +262,8 @@ asana-cli tasks get-custom-id OPS-42 --workspace 123
 ```
 
 list、search、get-custom-id では `--opt-fields` で追加 field を指定できます。
+`table` と `compact` では、list command が既定の表示列も要求するため、それらの列は空になりません。
+JSON 出力は `--opt-fields` を付けない限り、その既定列を追加しません。
 workspace task 検索には Asana Premium が必要です。検索結果は eventual consistency であり、
 通常の list command で使う offset pagination は利用できません。filter には
 `--assignee`、`--projects-any`、`--sections-any`、`--tags-any`、`--text`、

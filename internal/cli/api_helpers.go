@@ -247,14 +247,26 @@ func taskRequestData(p parsed, create bool) (asana.Object, error) {
 			return nil, fmt.Errorf("--membership is create-only; use tasks add-project for an existing task")
 		}
 		memberships := make([]asana.Object, 0, len(p.lists["membership"]))
+		var projects []string
+		seen := map[string]bool{}
 		for _, raw := range p.lists["membership"] {
 			project, section, ok := strings.Cut(raw, "=")
 			if !ok || project == "" || section == "" {
 				return nil, fmt.Errorf("--membership must use PROJECT_GID=SECTION_GID")
 			}
 			memberships = append(memberships, asana.Object{"project": project, "section": section})
+			if !seen[project] {
+				seen[project] = true
+				projects = append(projects, project)
+			}
 		}
 		data["memberships"] = memberships
+		_, hasProjects := data["projects"]
+		_, hasWorkspace := data["workspace"]
+		_, hasParent := data["parent"]
+		if !hasProjects && !hasWorkspace && !hasParent {
+			data["projects"] = projects
+		}
 	}
 	return data, nil
 }
@@ -265,6 +277,29 @@ func optFieldsQuery(raw string) url.Values {
 		q.Set("opt_fields", raw)
 	}
 	return q
+}
+
+func listOptFieldsQuery(format, typ, raw string) url.Values {
+	if format == "json" {
+		return optFieldsQuery(raw)
+	}
+	fields := append([]string{}, columns[typ]...)
+	seen := make(map[string]bool, len(fields))
+	for _, field := range fields {
+		seen[field] = true
+	}
+	for _, field := range strings.Split(raw, ",") {
+		field = strings.TrimSpace(field)
+		if field == "" || seen[field] {
+			continue
+		}
+		seen[field] = true
+		fields = append(fields, field)
+	}
+	if len(fields) == 0 {
+		return url.Values{}
+	}
+	return optFieldsQuery(strings.Join(fields, ","))
 }
 
 func writeAndRender(ctx context.Context, io *CliIO, rt RuntimeOptions, c *asana.Client, token, method, path, typ string, q url.Values, data asana.Object) error {

@@ -50,7 +50,7 @@ func miscExtendedCmd(kind, sub string, args []string, io *CliIO, rt RuntimeOptio
 		if parent == "" {
 			return fmt.Errorf("parent gid is required")
 		}
-		q := optFieldsQuery(p.vals["opt-fields"])
+		q := listOptFieldsQuery(rt.Output, "attachments", p.vals["opt-fields"])
 		q.Set("parent", parent)
 		items, err := c.ListObjects(ctx, token, "attachments", q)
 		if err != nil {
@@ -104,7 +104,7 @@ func miscExtendedCmd(kind, sub string, args []string, io *CliIO, rt RuntimeOptio
 		if err != nil {
 			return err
 		}
-		q := optFieldsQuery(p.vals["opt-fields"])
+		q := listOptFieldsQuery(rt.Output, "memberships", p.vals["opt-fields"])
 		if p.vals["parent"] != "" {
 			q.Set("parent", p.vals["parent"])
 		}
@@ -157,7 +157,7 @@ func miscExtendedCmd(kind, sub string, args []string, io *CliIO, rt RuntimeOptio
 		if len(p.pos) == 0 {
 			return fmt.Errorf("%s gid is required", kind[:len(kind)-1])
 		}
-		items, err := c.ListObjects(ctx, token, resourcePath(kind, p.pos[0], "projects"), optFieldsQuery(p.vals["opt-fields"]))
+		items, err := c.ListObjects(ctx, token, resourcePath(kind, p.pos[0], "projects"), listOptFieldsQuery(rt.Output, "projects", p.vals["opt-fields"]))
 		if err != nil {
 			return err
 		}

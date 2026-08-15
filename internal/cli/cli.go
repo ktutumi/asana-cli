@@ -530,7 +530,7 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		return render(io.out(), rt.Output, "workspaces", v)
 	case "projects:list":
-		p, err := parseFlags(args, []string{"workspace"}, nil, nil, 1)
+		p, err := parseFlags(args, []string{"workspace", "opt-fields"}, nil, nil, 1)
 		if err != nil {
 			return err
 		}
@@ -538,7 +538,11 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		if err != nil {
 			return err
 		}
-		v, err := c.ListProjects(context.Background(), tok, values("workspace", w))
+		q := listOptFieldsQuery(rt.Output, "projects", p.vals["opt-fields"])
+		if w != "" {
+			q.Set("workspace", w)
+		}
+		v, err := c.ListProjects(context.Background(), tok, q)
 		if err != nil {
 			return err
 		}
@@ -563,7 +567,11 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		return render(io.out(), rt.Output, "sections", v)
 	case "tasks:get", "tasks:subtasks", "tasks:stories", "tasks:comments", "tasks:attachments":
-		p, err := parseFlags(args, []string{"task"}, nil, nil, 1)
+		valueFlags := []string{"task"}
+		if sub == "subtasks" || sub == "attachments" {
+			valueFlags = append(valueFlags, "opt-fields")
+		}
+		p, err := parseFlags(args, valueFlags, nil, nil, 1)
 		if err != nil {
 			return err
 		}
@@ -583,13 +591,15 @@ func apiCmd(kind string, args []string, io *CliIO, rt RuntimeOptions) error {
 		}
 		var v []asana.Object
 		if sub == "subtasks" {
-			v, err = c.ListSubtasks(context.Background(), tok, gid)
+			v, err = c.ListObjects(context.Background(), tok, resourcePath("tasks", gid, "subtasks"), listOptFieldsQuery(rt.Output, "subtasks", p.vals["opt-fields"]))
 		} else if sub == "stories" {
 			v, err = c.ListStories(context.Background(), tok, gid)
 		} else if sub == "comments" {
 			v, err = c.ListComments(context.Background(), tok, gid)
 		} else {
-			v, err = c.ListAttachments(context.Background(), tok, gid)
+			q := listOptFieldsQuery(rt.Output, "attachments", p.vals["opt-fields"])
+			q.Set("parent", gid)
+			v, err = c.ListObjects(context.Background(), tok, "attachments", q)
 		}
 		if err != nil {
 			return err
@@ -813,8 +823,8 @@ func commandHelp(cmd string) string {
 
 Read:
   list --project|--section|--tag|--user-task-list GID [--opt-fields FIELDS]
-  get TASK_GID | subtasks TASK_GID | stories TASK_GID | comments TASK_GID
-  attachments TASK_GID | projects TASK_GID
+  get TASK_GID | subtasks TASK_GID [--opt-fields FIELDS] | stories TASK_GID | comments TASK_GID
+  attachments TASK_GID [--opt-fields FIELDS] | projects TASK_GID [--opt-fields FIELDS]
   dependencies TASK_GID | dependents TASK_GID
   search --workspace GID [filters] [--limit N] [--opt-fields FIELDS]
   get-custom-id CUSTOM_ID --workspace GID
@@ -849,7 +859,7 @@ for 30 days; afterward Asana removes them permanently.
 `,
 		"projects": `Usage: asana-cli projects <subcommand> [options]
 
-  list [WORKSPACE_GID]
+  list [WORKSPACE_GID] [--opt-fields FIELDS]
   get PROJECT_GID
   create --workspace GID --name NAME [project fields]
   update PROJECT_GID [project fields]
@@ -909,10 +919,10 @@ Use this command to inspect the job GID returned by duplicate and
 save-as-template operations.
 `,
 		"workspaces": `Usage: asana-cli workspaces list
-       asana-cli workspaces projects WORKSPACE_GID
+       asana-cli workspaces projects WORKSPACE_GID [--opt-fields FIELDS]
        asana-cli workspaces create-project WORKSPACE_GID --name NAME
 `,
-		"teams": `Usage: asana-cli teams projects TEAM_GID
+		"teams": `Usage: asana-cli teams projects TEAM_GID [--opt-fields FIELDS]
        asana-cli teams create-project TEAM_GID --name NAME
 `,
 	}

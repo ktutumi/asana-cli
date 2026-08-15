@@ -108,7 +108,7 @@ func projectsExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions
 		if len(p.pos) == 0 {
 			return fmt.Errorf("project gid is required")
 		}
-		items, err := c.ListObjects(ctx, token, resourcePath("projects", p.pos[0], "tasks"), optFieldsQuery(p.vals["opt-fields"]))
+		items, err := c.ListObjects(ctx, token, resourcePath("projects", p.pos[0], "tasks"), listOptFieldsQuery(rt.Output, "tasks", p.vals["opt-fields"]))
 		if err != nil {
 			return err
 		}
@@ -275,7 +275,7 @@ func sectionsExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions
 		if len(p.pos) == 0 {
 			return fmt.Errorf("section gid is required")
 		}
-		items, err := c.ListObjects(ctx, token, resourcePath("sections", p.pos[0], "tasks"), optFieldsQuery(p.vals["opt-fields"]))
+		items, err := c.ListObjects(ctx, token, resourcePath("sections", p.pos[0], "tasks"), listOptFieldsQuery(rt.Output, "tasks", p.vals["opt-fields"]))
 		if err != nil {
 			return err
 		}

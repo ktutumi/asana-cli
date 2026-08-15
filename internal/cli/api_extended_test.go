@@ -36,6 +36,39 @@ func TestTaskCreateAndUpdateRequests(t *testing.T) {
 			escaped:    "/tasks/task%2F1",
 			wantFields: map[string]any{"due_on": "2026-08-10"},
 		},
+		{
+			name:    "create with membership only",
+			args:    []string{"tasks", "create", "--name", "Section task", "--membership", "p1=s1"},
+			method:  http.MethodPost,
+			escaped: "/tasks",
+			wantFields: map[string]any{
+				"name":        "Section task",
+				"projects":    []any{"p1"},
+				"memberships": []any{map[string]any{"project": "p1", "section": "s1"}},
+			},
+		},
+		{
+			name:    "create with workspace and membership",
+			args:    []string{"tasks", "create", "--workspace", "w1", "--name", "Workspace task", "--membership", "p1=s1"},
+			method:  http.MethodPost,
+			escaped: "/tasks",
+			wantFields: map[string]any{
+				"workspace":   "w1",
+				"name":        "Workspace task",
+				"memberships": []any{map[string]any{"project": "p1", "section": "s1"}},
+			},
+		},
+		{
+			name:    "create with parent and membership",
+			args:    []string{"tasks", "create", "--parent", "t0", "--name", "Child task", "--membership", "p1=s1"},
+			method:  http.MethodPost,
+			escaped: "/tasks",
+			wantFields: map[string]any{
+				"parent":      "t0",
+				"name":        "Child task",
+				"memberships": []any{map[string]any{"project": "p1", "section": "s1"}},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -306,6 +339,199 @@ func TestAttachmentListPreservesLegacyTableColumns(t *testing.T) {
 	}
 	if firstLine, _, _ := strings.Cut(out.String(), "\n"); firstLine != "gid\tname\tdownload_url\tcreated_at" {
 		t.Fatalf("header=%q", firstLine)
+	}
+}
+
+func TestListCommandsRequestDefaultOptFieldsForTable(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		path    string
+		want    string
+		jsonOut string
+	}{
+		{
+			name:    "projects list",
+			args:    []string{"projects", "list", "w1"},
+			path:    "/projects",
+			want:    "gid,name,workspace.name",
+			jsonOut: `{"data":[{"gid":"p1","name":"Launch"}]}`,
+		},
+		{
+			name:    "workspaces projects",
+			args:    []string{"workspaces", "projects", "w1"},
+			path:    "/workspaces/w1/projects",
+			want:    "gid,name,workspace.name",
+			jsonOut: `{"data":[{"gid":"p1","name":"Launch"}]}`,
+		},
+		{
+			name:    "teams projects",
+			args:    []string{"teams", "projects", "team1"},
+			path:    "/teams/team1/projects",
+			want:    "gid,name,workspace.name",
+			jsonOut: `{"data":[{"gid":"p1","name":"Launch"}]}`,
+		},
+		{
+			name:    "tasks list",
+			args:    []string{"tasks", "list", "--project", "p1"},
+			path:    "/projects/p1/tasks",
+			want:    "gid,name,completed,created_at,modified_at",
+			jsonOut: `{"data":[{"gid":"t1","name":"Task"}]}`,
+		},
+		{
+			name:    "sections tasks",
+			args:    []string{"sections", "tasks", "s1"},
+			path:    "/sections/s1/tasks",
+			want:    "gid,name,completed,created_at,modified_at",
+			jsonOut: `{"data":[{"gid":"t1","name":"Task"}]}`,
+		},
+		{
+			name:    "projects tasks",
+			args:    []string{"projects", "tasks", "p1"},
+			path:    "/projects/p1/tasks",
+			want:    "gid,name,completed,created_at,modified_at",
+			jsonOut: `{"data":[{"gid":"t1","name":"Task"}]}`,
+		},
+		{
+			name:    "tasks projects",
+			args:    []string{"tasks", "projects", "t1"},
+			path:    "/tasks/t1/projects",
+			want:    "gid,name,workspace.name",
+			jsonOut: `{"data":[{"gid":"p1","name":"Launch"}]}`,
+		},
+		{
+			name:    "tasks subtasks",
+			args:    []string{"tasks", "subtasks", "t1"},
+			path:    "/tasks/t1/subtasks",
+			want:    "gid,name,completed",
+			jsonOut: `{"data":[{"gid":"st1","name":"Sub"}]}`,
+		},
+		{
+			name:    "attachments list",
+			args:    []string{"attachments", "list", "t1"},
+			path:    "/attachments",
+			want:    "gid,name,download_url,created_at",
+			jsonOut: `{"data":[{"gid":"a1","name":"Report"}]}`,
+		},
+		{
+			name:    "tasks attachments",
+			args:    []string{"tasks", "attachments", "t1"},
+			path:    "/attachments",
+			want:    "gid,name,download_url,created_at",
+			jsonOut: `{"data":[{"gid":"a1","name":"Report"}]}`,
+		},
+		{
+			name:    "tasks search",
+			args:    []string{"tasks", "search", "--workspace", "w1", "--text", "Launch"},
+			path:    "/workspaces/w1/tasks/search",
+			want:    "gid,name,completed,created_at,modified_at",
+			jsonOut: `{"data":[{"gid":"t1","name":"Task"}]}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotFields string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.EscapedPath() != tt.path {
+					t.Fatalf("path=%s", r.URL.EscapedPath())
+				}
+				gotFields = r.URL.Query().Get("opt_fields")
+				_, _ = w.Write([]byte(tt.jsonOut))
+			}))
+			defer server.Close()
+			errOut := &bytes.Buffer{}
+			code := cli.RunCLI(tt.args, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "table"})
+			if code != 0 {
+				t.Fatalf("code=%d err=%s", code, errOut.String())
+			}
+			if gotFields != tt.want {
+				t.Fatalf("opt_fields=%q want=%q", gotFields, tt.want)
+			}
+		})
+	}
+}
+
+func TestListCommandsOmitDefaultOptFieldsForJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		path string
+	}{
+		{name: "projects list", args: []string{"projects", "list", "w1"}, path: "/projects"},
+		{name: "tasks list", args: []string{"tasks", "list", "--project", "p1"}, path: "/projects/p1/tasks"},
+		{name: "tasks subtasks", args: []string{"tasks", "subtasks", "t1"}, path: "/tasks/t1/subtasks"},
+		{name: "attachments list", args: []string{"attachments", "list", "t1"}, path: "/attachments"},
+		{name: "tasks attachments", args: []string{"tasks", "attachments", "t1"}, path: "/attachments"},
+		{name: "workspaces projects", args: []string{"workspaces", "projects", "w1"}, path: "/workspaces/w1/projects"},
+		{name: "tasks projects", args: []string{"tasks", "projects", "t1"}, path: "/tasks/t1/projects"},
+		{name: "tasks search", args: []string{"tasks", "search", "--workspace", "w1"}, path: "/workspaces/w1/tasks/search"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotFields string
+			var saw bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.EscapedPath() != tt.path {
+					t.Fatalf("path=%s", r.URL.EscapedPath())
+				}
+				saw = true
+				gotFields = r.URL.Query().Get("opt_fields")
+				_, _ = w.Write([]byte(`{"data":[]}`))
+			}))
+			defer server.Close()
+			errOut := &bytes.Buffer{}
+			code := cli.RunCLI(tt.args, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "json"})
+			if code != 0 {
+				t.Fatalf("code=%d err=%s", code, errOut.String())
+			}
+			if !saw {
+				t.Fatal("request was not made")
+			}
+			if gotFields != "" {
+				t.Fatalf("opt_fields=%q want empty", gotFields)
+			}
+		})
+	}
+}
+
+func TestListCommandsMergeOptFieldsForTable(t *testing.T) {
+	var gotFields string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/projects/p1/tasks" {
+			t.Fatalf("path=%s", r.URL.EscapedPath())
+		}
+		gotFields = r.URL.Query().Get("opt_fields")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+	errOut := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"tasks", "list", "--project", "p1", "--opt-fields", "assignee.name"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "table"})
+	if code != 0 {
+		t.Fatalf("code=%d err=%s", code, errOut.String())
+	}
+	want := "gid,name,completed,created_at,modified_at,assignee.name"
+	if gotFields != want {
+		t.Fatalf("opt_fields=%q want=%q", gotFields, want)
+	}
+}
+
+func TestListCommandsKeepExplicitOptFieldsForJSON(t *testing.T) {
+	var gotFields string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/projects/p1/tasks" {
+			t.Fatalf("path=%s", r.URL.EscapedPath())
+		}
+		gotFields = r.URL.Query().Get("opt_fields")
+		_, _ = w.Write([]byte(`{"data":[]}`))
+	}))
+	defer server.Close()
+	errOut := &bytes.Buffer{}
+	code := cli.RunCLI([]string{"tasks", "list", "--project", "p1", "--opt-fields", "assignee.name"}, &cli.CliIO{Out: &bytes.Buffer{}, ErrOut: errOut}, cli.RuntimeOptions{ConfigPath: mustWriteConfigWithToken(t), APIBase: server.URL, Output: "json"})
+	if code != 0 {
+		t.Fatalf("code=%d err=%s", code, errOut.String())
+	}
+	if gotFields != "assignee.name" {
+		t.Fatalf("opt_fields=%q want=%q", gotFields, "assignee.name")
 	}
 }
 

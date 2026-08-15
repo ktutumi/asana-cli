@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -37,7 +36,7 @@ func tasksListCmd(args []string, io *CliIO, rt RuntimeOptions, c *asana.Client, 
 	case "user-task-list":
 		path = resourcePath("user_task_lists", gid, "tasks")
 	}
-	items, err := c.ListObjects(context.Background(), token, path, optFieldsQuery(p.vals["opt-fields"]))
+	items, err := c.ListObjects(context.Background(), token, path, listOptFieldsQuery(rt.Output, "tasks", p.vals["opt-fields"]))
 	if err != nil {
 		return err
 	}
@@ -153,8 +152,8 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 		if p.vals["sort-by"] != "" && !set([]string{"due_date", "created_at", "completed_at", "likes", "modified_at", "relevance"})[p.vals["sort-by"]] {
 			return fmt.Errorf("invalid --sort-by value: %s", p.vals["sort-by"])
 		}
-		q := url.Values{}
-		mapping := map[string]string{"assignee": "assignee.any", "projects-any": "projects.any", "sections-any": "sections.any", "tags-any": "tags.any", "text": "text", "completed": "completed", "is-subtask": "is_subtask", "modified-at-after": "modified_at.after", "due-on-before": "due_on.before", "due-on-after": "due_on.after", "start-on-before": "start_on.before", "start-on-after": "start_on.after", "sort-by": "sort_by", "sort-ascending": "sort_ascending", "limit": "limit", "opt-fields": "opt_fields"}
+		q := listOptFieldsQuery(rt.Output, "tasks", p.vals["opt-fields"])
+		mapping := map[string]string{"assignee": "assignee.any", "projects-any": "projects.any", "sections-any": "sections.any", "tags-any": "tags.any", "text": "text", "completed": "completed", "is-subtask": "is_subtask", "modified-at-after": "modified_at.after", "due-on-before": "due_on.before", "due-on-after": "due_on.after", "start-on-before": "start_on.before", "start-on-after": "start_on.after", "sort-by": "sort_by", "sort-ascending": "sort_ascending", "limit": "limit"}
 		for flag, query := range mapping {
 			if p.vals[flag] != "" {
 				q.Set(query, p.vals[flag])
@@ -189,13 +188,13 @@ func tasksExtendedCmd(sub string, args []string, io *CliIO, rt RuntimeOptions, c
 			return fmt.Errorf("task gid is required")
 		}
 		path := resourcePath("tasks", p.pos[0], sub)
-		items, err := c.ListObjects(ctx, token, path, optFieldsQuery(p.vals["opt-fields"]))
-		if err != nil {
-			return err
-		}
 		typ := sub
 		if sub == "dependencies" || sub == "dependents" {
 			typ = "tasks"
+		}
+		items, err := c.ListObjects(ctx, token, path, listOptFieldsQuery(rt.Output, typ, p.vals["opt-fields"]))
+		if err != nil {
+			return err
 		}
 		return render(io.out(), rt.Output, typ, items)
 

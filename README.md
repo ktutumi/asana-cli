@@ -224,11 +224,12 @@ Notes:
 
 ### Manage tasks and subtasks
 
-Create a task from a workspace, project, parent task, or project/section membership:
+Create a task from a workspace, project, parent task, or project/section membership. `--membership` alone is enough; the CLI also sends the membership project so Asana accepts the request:
 
 ```bash
 asana-cli tasks create --workspace 123 --name "Prepare launch" --due-on 2026-08-31
 asana-cli tasks create --project 456 --name "Review copy" --follower 111 --tag 222
+asana-cli tasks create --name "In progress item" --membership 456=123
 asana-cli tasks create-subtask 789 --name "Check links"
 asana-cli tasks update 789 --completed true
 ```
@@ -264,7 +265,9 @@ asana-cli tasks get-custom-id OPS-42 --workspace 123
 ```
 
 Use `--opt-fields` on list, search, and get-custom-id commands to request
-additional fields. Workspace task search requires Asana Premium, is eventually
+additional fields. For `table` and `compact` output, list commands also request
+the default display columns so those fields are not blank. JSON output does not
+add those columns unless you pass `--opt-fields`. Workspace task search requires Asana Premium, is eventually
 consistent, and does not support the normal offset pagination used by list
 commands. Filters include `--assignee`, `--projects-any`, `--sections-any`,
 `--tags-any`, `--text`, `--completed`, `--is-subtask`, `--modified-at-after`,
