@@ -416,6 +416,14 @@ If `ASANA_CLIENT_SECRET` is set, all API commands automatically refresh the save
 
 Skills for AI agents operating this CLI live under `skills/`.
 
+The bundled skill can also be printed from the binary itself:
+
+```bash
+./asana-cli --skill
+```
+
+This outputs the full `asana-cli-operator` Agent Skill (`skills/asana-cli-operator/SKILL.md`), so an agent can install or refresh the skill without repository access.
+
 Currently included:
 - `skills/asana-cli-operator/`
   - An operational skill for `asana-cli`. It defines how to authenticate, safely read or manage Asana resources, handle custom-field values, refresh tokens, and choose output formats.
@@ -437,6 +445,7 @@ Safe smoke checks:
 ```bash
 go run ./cmd/asana-cli --help
 go run ./cmd/asana-cli --version
+go run ./cmd/asana-cli --skill
 go run ./cmd/asana-cli auth url --client-id dummy --state fixed
 go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```

@@ -407,6 +407,14 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 
 AI Agent からこの CLI を扱うための Skill は `skills/` に置いています。
 
+同梱の Skill はバイナリからも出力できます:
+
+```bash
+./asana-cli --skill
+```
+
+`asana-cli-operator` Agent Skill (`skills/asana-cli-operator/SKILL.md`) の全文を出力するため、リポジトリにアクセスできない環境でも agent が Skill をインストールまたは更新できます。
+
 現在含まれるもの:
 - `skills/asana-cli-operator/`
   - `asana-cli` の運用 Skill。認証、Asana resource の安全な参照・操作、custom field 値の扱い、token refresh、出力形式の使い分けを定義しています。
@@ -428,6 +436,7 @@ go build -o /tmp/asana-cli ./cmd/asana-cli
 ```bash
 go run ./cmd/asana-cli --help
 go run ./cmd/asana-cli --version
+go run ./cmd/asana-cli --skill
 go run ./cmd/asana-cli auth url --client-id dummy --state fixed
 go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```
