@@ -111,6 +111,8 @@ func TestEnvOverrideAffectsClient(t *testing.T) {
 	t.Cleanup(apiServer.Close)
 
 	t.Setenv("ASANA_API_BASE", apiServer.URL+"/")
+	t.Setenv("ASANA_PAT", "")
+	t.Setenv("ASANA_CLIENT_SECRET", "")
 	opts := cli.NewRuntimeOptionsFromEnv()
 
 	cfg := config.StoredConfig{ClientID: "id", Token: &config.TokenData{AccessToken: "atok"}}
@@ -371,6 +373,7 @@ func TestSectionsListDuplicateTarget(t *testing.T) {
 }
 
 func TestEnvReadsClientSecret(t *testing.T) {
+	t.Setenv("ASANA_PAT", "")
 	t.Setenv("ASANA_CLIENT_SECRET", "secret")
 	opts := cli.NewRuntimeOptionsFromEnv()
 	if opts.ClientSecret != "secret" {

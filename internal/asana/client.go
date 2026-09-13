@@ -115,6 +115,20 @@ func (c *Client) postToken(v url.Values) (config.TokenData, error) {
 	return tok, nil
 }
 
+// APIRequestError identifies transport and response errors from an authenticated
+// API request. Local validation and OAuth token endpoint errors are not wrapped.
+type APIRequestError struct{ err error }
+
+func (e *APIRequestError) Error() string { return e.err.Error() }
+func (e *APIRequestError) Unwrap() error { return e.err }
+
+func apiRequestError(token string, err error) error {
+	if token == "" || err == nil {
+		return err
+	}
+	return &APIRequestError{err: err}
+}
+
 type Object map[string]any
 
 func (c *Client) FetchMe(_ context.Context, token string) (Object, error) {
@@ -236,11 +250,11 @@ func (c *Client) doRequestJSON(ctx context.Context, token, method, path string, 
 	}
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
-		return err
+		return apiRequestError(token, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return decodeError(resp)
+		return apiRequestError(token, decodeError(resp))
 	}
 	if resp.StatusCode == http.StatusNoContent || out == nil {
 		return nil
@@ -252,7 +266,7 @@ func (c *Client) doRequestJSON(ctx context.Context, token, method, path string, 
 	if err == io.EOF {
 		return nil
 	}
-	return err
+	return apiRequestError(token, err)
 }
 
 func decodeError(resp *http.Response) error {

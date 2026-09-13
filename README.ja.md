@@ -104,6 +104,8 @@ tar -xzf asana-cli-${VERSION}-linux-amd64.tar.gz
 
 ## Asana OAuth アプリ設定
 
+この設定が必要なのは OAuth flow の場合だけです。API command で `ASANA_PAT` を使う場合は、OAuth アプリを作成する必要はありません。
+
 Asana Developer Console で OAuth アプリを作成し、redirect URI を正確に登録してください。
 
 例:
@@ -114,6 +116,27 @@ Asana Developer Console で OAuth アプリを作成し、redirect URI を正確
 - `auth login` は localhost callback 専用です
 - OOB/manual copy-paste を使うときは `auth url` + `auth exchange` を使ってください
 - localhost callback で `:0` はテスト用です。本番運用では固定ポートを登録してください
+
+## Personal Access Token (PAT)
+
+API command では、空でない `ASANA_PAT` が保存済み OAuth credential より優先されます。明示的な `--config` path を指定していても同じです。PAT はメモリ内だけで使い、config file へ永続保存しません。PAT は API 用の別の入口であり、明示的な OAuth command を無効化しません。
+
+この変数は保護された shell environment、secret manager、または CI の secret injection から渡してください。実際の PAT を shell history、source control、例へ書かないでください。process environment は child process に継承されることがあるため、変数と subprocess の範囲を意図的に限定してください。
+
+```bash
+# ASANA_PAT は secret manager または CI environment から注入済みとします。
+asana-cli auth status
+asana-cli me
+
+# API command を保存済み OAuth credential に戻します。
+unset ASANA_PAT
+```
+
+`auth status` は、次の API call でローカルに選ばれる source を `authSource` として表示します。値は `env:ASANA_PAT`、`config`、`none` のいずれかです。network request は行わず、PAT の有効性、期限、権限を検証しません。PAT mode の `authenticated=true` は空でないローカル PAT が選ばれたことだけを示し、Asana に受け入れられたことは示しません。
+
+`ASANA_PAT` が未設定または空文字なら、従来の保存済み token と OAuth refresh の動作を使います。空でない不正値（前後の whitespace や control character など）は OAuth へ fallback せず error になります。PAT が 401/403 などで拒否されても、保存済み OAuth credential で再試行または refresh しません。PAT の再発行、権限、organization policy を確認してください。
+
+`auth url`、`auth login`、`auth exchange`、`auth refresh` は `ASANA_PAT` が設定されていても明示的な OAuth operation として動きます。`auth refresh` が更新するのは保存済み OAuth credential だけで、PAT は更新しません。API command を保存済み OAuth credential に戻すには `unset ASANA_PAT` を使います。
 
 ## 使い方
 
@@ -185,6 +208,9 @@ asana-cli auth status
 - `clientId` / `redirectUri`
 - access token / refresh token の有無（値そのものは redact）
 - `expires_at`
+- 次の API call で選ばれるローカル credential source を示す `authSource`
+
+これは offline status 表示です。Asana へ通信せず、token の有効性、期限、権限を検証しません。
 
 ### token を refresh する
 
@@ -389,6 +415,7 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 
 保存しない内容:
 - `clientSecret`
+- `ASANA_PAT`（memory 内だけで使い、config field にはしません）
 
 必要なら `--config /path/to/credentials.json` で変更できます。
 
@@ -397,11 +424,12 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 - `ASANA_API_BASE`: Asana API base URL を上書き
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: OAuth token endpoint を上書き
 - `BROWSER`: `auth login` で使うブラウザコマンド
+- `ASANA_PAT`: API command 用の Personal Access Token。空でない値は `--config` 指定時も保存済み OAuth credential より優先され、永続保存しません。
 - `ASANA_CLIENT_SECRET`: 保存済み access token が期限切れまたは期限間近の場合、API コール前に自動 refresh を有効化する。値は永続化されません。
 
 ### 自動 token refresh
 
-`ASANA_CLIENT_SECRET` を設定すると、すべての API コマンド実行前に保存済み access token の有効期限を確認します。期限切れまたは残り5分以内の場合、自動的に refresh して新しい token を設定ファイルに保存します。refresh に失敗した場合は API コールを行わずエラーで終了します。
+`ASANA_PAT` が未設定または空文字で、`ASANA_CLIENT_SECRET` を設定している場合、API command 実行前に保存済み access token の有効期限を確認します。期限切れまたは残り5分以内の場合、自動的に refresh して新しい token を設定ファイルに保存します。refresh に失敗した場合は API コールを行わず error で終了します。PAT が選ばれている場合は config の読込・書込と OAuth の自動 refresh を行いません。
 
 ## Skills
 

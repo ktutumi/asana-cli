@@ -104,6 +104,9 @@ tar -xzf asana-cli-${VERSION}-linux-amd64.tar.gz
 
 ## Asana OAuth app setup
 
+This setup is only required for the OAuth flow. If API commands use `ASANA_PAT`,
+you do not need to create an OAuth app.
+
 Create an OAuth app in the Asana Developer Console and register the redirect URI exactly.
 
 Examples:
@@ -114,6 +117,43 @@ Notes:
 - `auth login` is only for the localhost callback flow
 - For the OOB/manual copy-paste flow, use `auth url` + `auth exchange`
 - `:0` on a localhost callback is only for testing. Register a fixed port for real use
+
+## Personal access token (PAT)
+
+For API commands, a non-empty `ASANA_PAT` takes precedence over saved OAuth
+credentials, including credentials selected with an explicit `--config` path.
+The PAT is kept in memory only and is not persisted to the config file. It is an
+alternative API entry point; it does not disable explicit OAuth commands.
+
+Supply the variable through a protected shell environment, a secret manager, or
+CI secret injection. Do not put a real PAT in shell history, source control, or
+examples. A process environment can be inherited by child processes, so scope
+the variable and its subprocesses deliberately.
+
+```bash
+# ASANA_PAT is supplied by your secret manager or CI environment.
+asana-cli auth status
+asana-cli me
+
+# Return API commands to saved OAuth credentials.
+unset ASANA_PAT
+```
+
+`auth status` reports the locally selected source as `authSource`:
+`env:ASANA_PAT`, `config`, or `none`. It makes no network request. It does not verify a PAT's validity, expiration, or permissions. In PAT mode,
+`authenticated=true` means a non-empty local PAT was selected, not that Asana
+accepted it.
+
+An unset or empty `ASANA_PAT` retains the existing saved-token and OAuth refresh
+behavior. A non-empty malformed value (for example, leading/trailing whitespace
+or control characters) fails without falling back to OAuth. A rejected PAT
+(including HTTP 401 or 403) also does not retry with saved OAuth credentials or
+refresh them; check the PAT's issuance, permissions, and organization policy.
+
+`auth url`, `auth login`, `auth exchange`, and `auth refresh` remain explicit
+OAuth operations even when `ASANA_PAT` is set. `auth refresh` refreshes saved
+OAuth credentials only; it never updates a PAT. Use `unset ASANA_PAT` when API
+commands should return to saved OAuth credentials.
 
 ## Usage
 
@@ -185,6 +225,10 @@ This command shows:
 - `clientId` / `redirectUri`
 - whether an access token / refresh token exists (the values themselves are redacted)
 - `expires_at`
+- `authSource`, the local API credential source that the next API call selects
+
+It is an offline status display: it does not call Asana or verify token validity,
+expiration, or permissions.
 
 ### Refresh a token
 
@@ -398,6 +442,7 @@ Persisted fields:
 
 Not persisted:
 - `clientSecret`
+- `ASANA_PAT` (memory only; it is never a config field)
 
 Override the path with `--config /path/to/credentials.json`.
 
@@ -406,11 +451,12 @@ Override the path with `--config /path/to/credentials.json`.
 - `ASANA_API_BASE`: override the Asana API base URL
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: override the OAuth token endpoint
 - `BROWSER`: browser command used by `auth login`
+- `ASANA_PAT`: Personal Access Token for API commands. A non-empty value takes precedence over saved OAuth credentials, even with `--config`; it is not persisted.
 - `ASANA_CLIENT_SECRET`: enables automatic token refresh before API calls when the saved access token is expired or near expiration. The value is never persisted.
 
 ### Automatic token refresh
 
-If `ASANA_CLIENT_SECRET` is set, all API commands automatically refresh the saved access token before making requests when it is expired or within 5 minutes of expiration. The refreshed token is saved back to the config file. If the token cannot be refreshed, the command exits with an error instead of making the API call.
+When `ASANA_PAT` is unset or empty and `ASANA_CLIENT_SECRET` is set, API commands automatically refresh the saved access token before making requests when it is expired or within 5 minutes of expiration. The refreshed token is saved back to the config file. If the token cannot be refreshed, the command exits with an error instead of making the API call. A selected PAT bypasses config reads, writes, and automatic OAuth refresh.
 
 ## Skills
 
