@@ -90,17 +90,17 @@ func (c *Client) UploadAttachment(ctx context.Context, token string, input Attac
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	resp, err := c.httpClient().Do(req)
 	if err != nil {
-		return nil, err
+		return nil, apiRequestError(token, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, decodeError(resp)
+		return nil, apiRequestError(token, decodeError(resp))
 	}
 	var env struct {
 		Data Object `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return nil, err
+		return nil, apiRequestError(token, err)
 	}
 	return env.Data, nil
 }

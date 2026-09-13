@@ -86,7 +86,8 @@ func configuredPAT(pat string) (string, bool, error) {
 
 func writeCLIError(w io.Writer, err error, pat string) {
 	message := err.Error()
-	if pat != "" {
+	var requestErr *asana.APIRequestError
+	if pat != "" && errors.As(err, &requestErr) {
 		message = strings.ReplaceAll(message, pat, "***")
 	}
 	fmt.Fprintln(w, message)

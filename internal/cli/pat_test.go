@@ -365,23 +365,90 @@ func TestPATRejectionDoesNotFallbackOrChangeConfig(t *testing.T) {
 	}
 }
 
-func TestPATMasksAllCLIErrorBoundaries(t *testing.T) {
-	pat := "pat-boundary-value"
+func TestPATPreservesUnrelatedDiagnostics(t *testing.T) {
 	for _, tc := range []struct {
 		name string
+		pat  string
 		args []string
+		want string
 	}{
-		{name: "global parsing", args: []string{"--output", pat}},
-		{name: "command dispatch", args: []string{"unknown-" + pat}},
+		{name: "global parsing", pat: "required", args: []string{"--output", "required"}, want: "invalid output: required\n"},
+		{name: "command dispatch", pat: "required", args: []string{"unknown-required"}, want: "unknown command: unknown-required\n"},
+		{name: "OAuth validation", pat: "required", args: []string{"auth", "exchange"}, want: "--code is required\n"},
+		{name: "API validation", pat: "required", args: []string{"tasks", "get"}, want: "task gid is required\n"},
+		{name: "API flag parsing", pat: "required", args: []string{"workspaces", "list", "--required"}, want: "flag is not applicable: --required\n"},
+		{name: "extended API validation", pat: "required", args: []string{"attachments", "upload"}, want: "--parent is required\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			code, _, errOut := runPATCLI(t, tc.args, cli.RuntimeOptions{PAT: pat})
-			if code != 1 || strings.Contains(errOut, pat) || !strings.Contains(errOut, "***") {
-				t.Fatal("CLI error boundary exposed the PAT")
+			code, out, errOut := runPATCLI(t, tc.args, cli.RuntimeOptions{
+				PAT: tc.pat, ConfigPath: filepath.Join(t.TempDir(), "missing.json"),
+				HTTPClient: &http.Client{Transport: patErrorTransport(func(*http.Request) (*http.Response, error) {
+					t.Error("validation unexpectedly made an HTTP request")
+					return nil, errors.New("unexpected HTTP request")
+				})},
+			})
+			if code != 1 || out != "" || errOut != tc.want {
+				t.Fatalf("got code=%d stdout=%q stderr=%q; want stderr=%q", code, out, errOut, tc.want)
 			}
 		})
 	}
 }
+
+type patErrorTransport func(*http.Request) (*http.Response, error)
+
+func (f patErrorTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestPATMasksAPIRequestErrors(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "attachment.txt")
+	if err := os.WriteFile(filePath, []byte("attachment body"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []struct {
+		name string
+		args []string
+	}{
+		{name: "JSON read", args: []string{"me"}},
+		{name: "JSON write", args: []string{"tasks", "create", "--workspace", "workspace-1", "--name", "Created"}},
+		{name: "multipart", args: []string{"attachments", "upload", "--parent", "parent-1", "--file", filePath}},
+	} {
+		for _, failure := range []string{"server", "transport", "response body"} {
+			t.Run(command.name+"/"+failure, func(t *testing.T) {
+				calls := 0
+				api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					calls++
+					if r.Header.Get("Authorization") != "Bearer "+testPAT {
+						t.Error("API request did not carry the PAT")
+					}
+					w.WriteHeader(http.StatusForbidden)
+					_ = json.NewEncoder(w).Encode(map[string]any{"errors": []map[string]string{{"message": "reflected " + r.Header.Get("Authorization")}}})
+				}))
+				t.Cleanup(api.Close)
+				opts := cli.RuntimeOptions{PAT: testPAT, APIBase: api.URL, ConfigPath: filepath.Join(t.TempDir(), "missing.json")}
+				if failure != "server" {
+					opts.HTTPClient = &http.Client{Transport: patErrorTransport(func(r *http.Request) (*http.Response, error) {
+						calls++
+						if r.Header.Get("Authorization") != "Bearer "+testPAT {
+							t.Error("API transport did not receive the PAT")
+						}
+						err := errors.New("reflected " + r.Header.Get("Authorization"))
+						if failure == "transport" {
+							return nil, err
+						}
+						return &http.Response{StatusCode: http.StatusOK, ContentLength: -1, Body: io.NopCloser(patErrorReader{err})}, nil
+					})}
+				}
+				code, out, errOut := runPATCLI(t, command.args, opts)
+				if code != 1 || calls != 1 || out != "" || strings.Contains(errOut, testPAT) || !strings.Contains(errOut, "reflected Bearer ***") {
+					t.Fatal("API request error was not masked, or the request was retried")
+				}
+			})
+		}
+	}
+}
+
+type patErrorReader struct{ err error }
+
+func (r patErrorReader) Read([]byte) (int, error) { return 0, r.err }
 
 func TestPATPropagatesToJSONWritesPaginationAndMultipart(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "attachment.txt")
