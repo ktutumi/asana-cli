@@ -54,19 +54,42 @@ func (c *CliIO) err() io.Writer {
 
 type RuntimeOptions struct {
 	ConfigPath, Output, APIBase, TokenEndpoint, Browser string
-	ClientSecret                                        string
+	ClientSecret, PAT                                   string
 	OpenBrowser                                         func(string) error
 	HTTPClient                                          interface{}
 }
 
 func NewRuntimeOptionsFromEnv() RuntimeOptions {
-	return RuntimeOptions{APIBase: getenv("ASANA_API_BASE", "https://app.asana.com/api/1.0/"), TokenEndpoint: getenv("ASANA_OAUTH_TOKEN_ENDPOINT", "https://app.asana.com/-/oauth_token"), Browser: os.Getenv("BROWSER"), ClientSecret: os.Getenv("ASANA_CLIENT_SECRET"), Output: "table"}
+	return RuntimeOptions{APIBase: getenv("ASANA_API_BASE", "https://app.asana.com/api/1.0/"), TokenEndpoint: getenv("ASANA_OAUTH_TOKEN_ENDPOINT", "https://app.asana.com/-/oauth_token"), Browser: os.Getenv("BROWSER"), ClientSecret: os.Getenv("ASANA_CLIENT_SECRET"), PAT: os.Getenv("ASANA_PAT"), Output: "table"}
 }
 func getenv(k, d string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
 	}
 	return d
+}
+
+func configuredPAT(pat string) (string, bool, error) {
+	if pat == "" {
+		return "", false, nil
+	}
+	if trimmed := strings.TrimSpace(pat); trimmed == "" || trimmed != pat {
+		return "", true, errors.New("ASANA_PAT is invalid; it must not contain leading or trailing whitespace")
+	}
+	for _, r := range pat {
+		if r < 0x20 || r == 0x7f {
+			return "", true, errors.New("ASANA_PAT is invalid; it must not contain control characters")
+		}
+	}
+	return pat, true, nil
+}
+
+func writeCLIError(w io.Writer, err error, pat string) {
+	message := err.Error()
+	if pat != "" {
+		message = strings.ReplaceAll(message, pat, "***")
+	}
+	fmt.Fprintln(w, message)
 }
 
 func RunCLI(args []string, io *CliIO, rt RuntimeOptions) (code int) {
@@ -81,7 +104,7 @@ func RunCLI(args []string, io *CliIO, rt RuntimeOptions) (code int) {
 	}
 	g, rest, err := parseGlobal(args, rt)
 	if err != nil {
-		fmt.Fprintln(io.err(), err)
+		writeCLIError(io.err(), err, rt.PAT)
 		return 1
 	}
 	rt = g
@@ -106,7 +129,7 @@ func RunCLI(args []string, io *CliIO, rt RuntimeOptions) (code int) {
 		return 0
 	}
 	if err := dispatch(rest, io, rt); err != nil {
-		fmt.Fprintln(io.err(), err)
+		writeCLIError(io.err(), err, rt.PAT)
 		return 1
 	}
 	return 0
@@ -280,12 +303,17 @@ func tokenNeedsRefresh(tok config.TokenData, now time.Time, buffer time.Duration
 }
 
 func loadAPIToken(ctx context.Context, path string, rt RuntimeOptions, c *asana.Client, now func() time.Time) (string, error) {
+	if pat, configured, err := configuredPAT(rt.PAT); err != nil {
+		return "", err
+	} else if configured {
+		return pat, nil
+	}
 	cfg, err := config.LoadConfig(path)
 	if err != nil {
 		return "", err
 	}
 	if cfg.Token == nil || cfg.Token.AccessToken == "" {
-		return "", errors.New("access token is not configured; run `asana-cli auth login` or use `auth url` and `auth exchange` manual flow")
+		return "", errors.New("access token is not configured; set ASANA_PAT or run `asana-cli auth login` or use `auth url` and `auth exchange` manual flow")
 	}
 
 	if rt.ClientSecret == "" {
@@ -329,7 +357,7 @@ func loadToken(path string) (string, error) {
 		return "", err
 	}
 	if cfg.Token == nil || cfg.Token.AccessToken == "" {
-		return "", errors.New("access token is not configured; run `asana-cli auth login` or use `auth url` and `auth exchange` manual flow")
+		return "", errors.New("access token is not configured; set ASANA_PAT or run `asana-cli auth login` or use `auth url` and `auth exchange` manual flow")
 	}
 	return cfg.Token.AccessToken, nil
 }
@@ -423,11 +451,29 @@ func authCmd(args []string, io *CliIO, rt RuntimeOptions) error {
 		if p.vals["config"] != "" {
 			rt.ConfigPath = p.vals["config"]
 		}
+		if pat, configured, err := configuredPAT(rt.PAT); err != nil {
+			return err
+		} else if configured {
+			m := map[string]any{
+				"status":        "status",
+				"clientId":      "",
+				"redirectUri":   "",
+				"authenticated": true,
+				"authSource":    "env:ASANA_PAT",
+				"token":         redactToken(config.TokenData{AccessToken: pat, TokenType: "Bearer"}),
+			}
+			return render(io.out(), rt.Output, "status", m)
+		}
 		cfg, err := config.LoadConfig(rt.ConfigPath)
 		if err != nil {
 			return err
 		}
-		m := map[string]any{"status": "status", "clientId": cfg.ClientID, "redirectUri": cfg.RedirectURI, "authenticated": cfg.Token != nil && cfg.Token.AccessToken != ""}
+		authenticated := cfg.Token != nil && cfg.Token.AccessToken != ""
+		authSource := "none"
+		if authenticated {
+			authSource = "config"
+		}
+		m := map[string]any{"status": "status", "clientId": cfg.ClientID, "redirectUri": cfg.RedirectURI, "authenticated": authenticated, "authSource": authSource}
 		if cfg.Token != nil {
 			m["token"] = redactToken(*cfg.Token)
 		}
@@ -678,7 +724,7 @@ func openURL(rt RuntimeOptions, u string) error {
 	}
 }
 
-var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "project": {"gid", "name", "archived", "privacy_setting", "workspace.name"}, "sections": {"gid", "name"}, "section": {"gid", "name", "project.gid"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "story": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "attachment": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "memberships": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "membership": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "job": {"gid", "status", "new_project.gid", "new_task.gid", "new_project_template.gid"}, "result": {"deleted", "gid", "resource_type"}, "task_counts": {"num_tasks", "num_incomplete_tasks", "num_completed_tasks", "num_milestones", "num_incomplete_milestones", "num_completed_milestones"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at"}}
+var columns = map[string][]string{"workspaces": {"gid", "name"}, "projects": {"gid", "name", "workspace.name"}, "project": {"gid", "name", "archived", "privacy_setting", "workspace.name"}, "sections": {"gid", "name"}, "section": {"gid", "name", "project.gid"}, "tasks": {"gid", "name", "completed", "created_at", "modified_at"}, "task": {"gid", "name", "completed", "notes", "created_at", "modified_at"}, "subtasks": {"gid", "name", "completed"}, "stories": {"gid", "resource_subtype", "text", "created_at", "created_by.name"}, "story": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "comments": {"gid", "resource_subtype", "text", "html_text", "created_at", "created_by.name"}, "attachments": {"gid", "name", "download_url", "created_at"}, "attachment": {"gid", "name", "resource_subtype", "download_url", "created_at"}, "memberships": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "membership": {"gid", "access_level", "member.gid", "member.name", "parent.gid", "parent.name"}, "job": {"gid", "status", "new_project.gid", "new_task.gid", "new_project_template.gid"}, "result": {"deleted", "gid", "resource_type"}, "task_counts": {"num_tasks", "num_incomplete_tasks", "num_completed_tasks", "num_milestones", "num_incomplete_milestones", "num_completed_milestones"}, "me": {"gid", "name", "email"}, "token": {"access_token", "refresh_token", "token_type", "expires_in", "expires_at"}, "status": {"status", "authenticated", "clientId", "redirectUri", "token.access_token", "token.refresh_token", "token.expires_at", "authSource"}}
 
 func render(w io.Writer, format, typ string, data any) error {
 	if format == "json" {
@@ -821,10 +867,30 @@ Global flags:
   --help, -h         Show help
   --version, -V      Show version
   --skill            Print the embedded asana-cli-operator Agent Skill (SKILL.md)
+
+Authentication:
+  A non-empty ASANA_PAT takes precedence over saved OAuth credentials, even with
+  --config. It is not persisted. auth status reports only the locally selected
+  source and does not verify token validity, permissions, or network access.
+  auth url, login, exchange, and refresh remain explicit OAuth operations.
 `
 }
 func commandHelp(cmd string) string {
 	help := map[string]string{
+		"auth": `Usage: asana-cli auth <url|exchange|refresh|status|login> [options]
+
+  url --client-id ID [--redirect-uri URI] [--state STATE] [--scope SCOPE]
+  exchange --code CODE --client-secret SECRET [--client-id ID] [--redirect-uri URI]
+  refresh --client-secret SECRET [--client-id ID] [--refresh-token TOKEN]
+  status [--config PATH]
+  login --client-id ID --client-secret SECRET [--redirect-uri URI] [--no-open]
+
+API commands prefer a non-empty ASANA_PAT over saved OAuth credentials, including
+an explicit --config path. The PAT is not persisted. auth status reports the
+locally selected authSource and does not verify token validity or permissions.
+auth url, login, exchange, and refresh remain explicit OAuth operations; unset
+ASANA_PAT to return API commands to saved OAuth credentials.
+`,
 		"tasks": `Usage: asana-cli tasks <subcommand> [options]
 
 Read:

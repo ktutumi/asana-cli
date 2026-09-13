@@ -17,7 +17,7 @@ metadata:
 
 ## Goal
 
-Use `asana-cli` safely and efficiently for real Asana reads, writes, and OAuth maintenance.
+Use `asana-cli` safely and efficiently for real Asana reads, writes, PAT use, and OAuth maintenance.
 
 This skill is about operating the CLI, not implementing it. Prefer executing the CLI and showing grounded results over paraphrasing README text.
 
@@ -71,24 +71,34 @@ go run ./cmd/asana-cli auth status
 ```
 
 Why:
-- it reveals whether credentials exist
-- it shows the saved client ID and redirect URI
-- it confirms whether access/refresh tokens are present
+- it reveals the locally selected source for the next API call: `env:ASANA_PAT`, `config`, or `none`
+- it shows saved client ID and redirect URI only when config is the selected source
+- it confirms whether saved access/refresh tokens are present without printing their values
+- it is offline status only: it does not call Asana or verify a PAT's validity, expiration, or permissions
 - token values are redacted, so it is safe to share the output unless the user asks otherwise
 
 If credentials are missing, do not pretend the API calls will work. Move to the authentication flows below.
 
-## Expired-token hard rule
+## Authentication selection and expired-token rule
 
-When `asana-cli auth status` shows an expired access token and a refresh token is present, your next command MUST be:
+When `auth status` reports `authSource=env:ASANA_PAT`, do not require or run OAuth refresh before an API command. A non-empty `ASANA_PAT` takes precedence over saved OAuth credentials, including an explicit `--config` path, and is never persisted. It is a local selection only, not an online validation result.
+
+If a PAT request receives 401, 403, or another authorization failure:
+- do not retry with saved OAuth credentials or run OAuth refresh automatically
+- ask the user to check PAT issuance, permissions, and organization policy; do not classify every authorization failure as expiration
+- use `unset ASANA_PAT` only when the user intends subsequent API commands to return to saved OAuth credentials
+
+`auth url`, `auth login`, `auth exchange`, and `auth refresh` remain explicit OAuth operations even when `ASANA_PAT` is set. `auth refresh` updates saved OAuth credentials only; it never updates a PAT.
+
+Only when `authSource=config` shows an expired access token and a refresh token is present, the next command MUST be:
 
 ```bash
 asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 ```
 
-This is mandatory whenever `ASANA_CLIENT_SECRET` is available. Do this before any other investigation, API read, config-file inspection, `auth url`, `auth exchange`, or `auth login` attempt.
+This is mandatory whenever `ASANA_CLIENT_SECRET` is available and `ASANA_PAT` is unset or empty. Do this before any other investigation, API read, config-file inspection, `auth url`, `auth exchange`, or `auth login` attempt.
 
-If `ASANA_CLIENT_SECRET` is not available, ask for it explicitly and do not explore alternative authentication methods first. Only switch to `auth login` or the manual `auth url` + `auth exchange` flow after `auth refresh` has actually failed because the refresh token is missing, invalid, revoked, or rejected by Asana.
+If `ASANA_CLIENT_SECRET` is not available, ask for it explicitly and do not explore alternative OAuth authentication methods first. Only switch to `auth login` or the manual `auth url` + `auth exchange` flow after `auth refresh` has actually failed because the refresh token is missing, invalid, revoked, or rejected by Asana.
 
 Common rationalizations are wrong:
 - Do not inspect the credentials file to look for another way around refresh.
@@ -140,6 +150,16 @@ Check saved auth state:
 asana-cli auth status
 ```
 
+#### Personal Access Token
+
+For API reads and writes, a non-empty `ASANA_PAT` is preferred over saved OAuth credentials. Do not place a literal PAT in a command, shell history, source file, or chat; require that a protected shell environment, secret manager, or CI secret injection already supplies it. Environment variables can be inherited by child processes, so keep process scope deliberate.
+
+Use `auth status` to see `authSource=env:ASANA_PAT`, then run the requested API command. The status does not verify whether the PAT is valid or authorized. To return to saved OAuth credentials for later API commands:
+
+```bash
+unset ASANA_PAT
+```
+
 Generate authorization URL for manual/OOB flow:
 ```bash
 asana-cli auth url --client-id "$ASANA_CLIENT_ID"
@@ -166,6 +186,8 @@ Refresh access token:
 ```bash
 asana-cli auth refresh --client-secret "$ASANA_CLIENT_SECRET"
 ```
+
+Use this only for the saved OAuth path. It does not refresh or save `ASANA_PAT`.
 
 ### Read APIs
 
@@ -314,7 +336,7 @@ For OOB/manual copy-paste flows, use:
 
 Do not assume the CLI saved `clientSecret`.
 This CLI intentionally does not persist it.
-If refresh is needed, obtain or ask for `--client-secret` explicitly.
+If refresh is needed on the saved OAuth path, obtain or ask for `--client-secret` explicitly. Do not require it when `authSource=env:ASANA_PAT` is selected.
 
 ### Custom-field strings and typed values are separate
 
@@ -420,11 +442,12 @@ Persisted data:
 
 Not persisted:
 - `clientSecret`
+- `ASANA_PAT` (memory only; it is never written to the config file)
 
 Expected security behavior:
 - config directory uses `0700` and the credentials file uses `0600` on Unix
 - stdout token output is redacted
-- `auth status` reports token presence without printing secrets
+- `auth status` reports the local auth source and token presence without printing secrets or making an online validity check
 
 ## Repo-aware validation flow
 
