@@ -2,13 +2,14 @@
 
 Language: English | [日本語](README.ja.md)
 
-A personal Asana OAuth and API CLI written in Go, structured for distributing macOS and Linux binaries through GitHub Releases.
+A personal Asana OAuth / PAT and API CLI written in Go, structured for distributing macOS and Linux binaries through GitHub Releases.
 
 Key features:
 - Generate an authorization URL with `auth url`
 - Exchange an authorization code for a token with `auth exchange`
 - Complete automatic login via a localhost callback with `auth login`
-- Check the status of saved credentials with `auth status`
+- Use `ASANA_PAT` for API authentication without an OAuth app
+- Check the locally selected credential source with `auth status`
 - Refresh the access token with a refresh token via `auth refresh`
 - `me`
 - `workspaces list`
@@ -19,7 +20,7 @@ Key features:
 
 Security and UX policy:
 - Prefer the XDG Base Directory for the config file (`$XDG_CONFIG_HOME/asana-cli/credentials.json`)
-- Keep config file permissions at `0600`
+- Keep config directory permissions at `0700` and file permissions at `0600`
 - Do not persist `clientSecret`
 - Redact `access_token` / `refresh_token` when printing tokens to stdout
 - `auth login` only accepts redirect URIs under `http://127.0.0.1/...` or `http://localhost/...`
@@ -28,8 +29,10 @@ Security and UX policy:
 
 ### go install
 
+Building from source or using `go install` requires Go 1.26 or later.
+
 ```bash
-go install github.com/ktutumi/asana-cli-go/cmd/asana-cli@latest
+go install github.com/ktutumi/asana-cli/cmd/asana-cli@latest
 ```
 
 ### Build from source
@@ -47,37 +50,40 @@ Prebuilt binaries are available for the following targets:
 - `darwin-arm64`
 
 Releases:
-- https://github.com/ktutumi/asana-cli-go/releases
+- https://github.com/ktutumi/asana-cli/releases
 
-Each archive also includes a matching `.sha256` file.
+Each archive has a separate matching `.sha256` release asset. The release tag
+has a `v` prefix; archive and extracted directory names omit it.
 
 Example filenames:
-- `asana-cli-vX.Y.Z-linux-amd64.tar.gz`
-- `asana-cli-vX.Y.Z-linux-amd64.tar.gz.sha256`
+- `asana-cli-X.Y.Z-linux-amd64.tar.gz`
+- `asana-cli-X.Y.Z-linux-amd64.tar.gz.sha256`
 
 Download examples:
 
+Replace the example version with the release you want to download.
+
 Linux amd64:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
 ```
 
 macOS Intel:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
 ```
 
 macOS Apple Silicon:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
 ```
 
@@ -97,8 +103,9 @@ Notes:
 
 Extraction example:
 ```bash
-VERSION=v0.1.0
+VERSION=0.1.0
 tar -xzf asana-cli-${VERSION}-linux-amd64.tar.gz
+cd asana-cli-${VERSION}-linux-amd64
 ./asana-cli --help
 ```
 
@@ -109,13 +116,11 @@ you do not need to create an OAuth app.
 
 Create an OAuth app in the Asana Developer Console and register the redirect URI exactly.
 
-Examples:
-- `urn:ietf:wg:oauth:2.0:oob`
-- `http://127.0.0.1:18787/callback`
+Default redirect URI: `http://127.0.0.1:18787/callback`.
 
 Notes:
-- `auth login` is only for the localhost callback flow
-- For the OOB/manual copy-paste flow, use `auth url` + `auth exchange`
+- `auth login` accepts only HTTP localhost / 127.0.0.1 callbacks with a path and no query or fragment; it rejects OOB redirects
+- For manual code exchange, use `auth url` + `auth exchange` with the same registered redirect URI. These commands do not start a callback server; receive the callback yourself and verify its `state` before exchanging the code
 - `:0` on a localhost callback is only for testing. Register a fixed port for real use
 
 ## Personal access token (PAT)
@@ -161,6 +166,11 @@ commands should return to saved OAuth credentials.
 
 The default output format is `table`. Use `--output json` or `--output compact` when needed.
 
+Place global `--config` and `--output` flags before the command. `auth status`
+also accepts its own `--config` flag. Use `asana-cli tasks --help` (or another
+command's `--help`) for command syntax. `project` aliases `projects`, and `ls`
+aliases `list` where available.
+
 ```bash
 asana-cli --output json workspaces list
 asana-cli --output table workspaces list
@@ -172,21 +182,32 @@ When to use each format:
 - `table`: TSV-like output with headers. Easier for humans to scan in a list
 - `compact`: Concise `field=value` output. Collections are rendered as one item per line
 
+For a single object, `table` prints one `field<TAB>value` per line. Both `table`
+and `compact` escape backslashes, tabs, CR, and LF in values. `auth login`,
+`auth exchange`, and `auth refresh` print redacted tokens in `compact` format
+unless `--output json` is selected. `auth url` prints a URL, not a rendered object.
+
 ### Print an authorization URL
 
 ```bash
 asana-cli auth url \
   --client-id "$ASANA_CLIENT_ID" \
-  --state demo-state
+  --redirect-uri http://127.0.0.1:18787/callback
 ```
 
 ### Exchange a code in the manual flow
+
+`auth url` generates a random state by default. Preserve that value and verify
+the callback state yourself; `auth exchange` does not perform state validation.
+The `ASANA_CLIENT_ID` and `ASANA_CODE` variables below are shell placeholders,
+not variables automatically read by the CLI. Explicit OAuth commands require
+`--client-secret`; `ASANA_CLIENT_SECRET` alone only enables automatic API refresh.
 
 ```bash
 asana-cli auth exchange \
   --client-id "$ASANA_CLIENT_ID" \
   --client-secret "$ASANA_CLIENT_SECRET" \
-  --redirect-uri urn:ietf:wg:oauth:2.0:oob \
+  --redirect-uri http://127.0.0.1:18787/callback \
   --code "$ASANA_CODE"
 ```
 
@@ -210,12 +231,12 @@ asana-cli auth login \
 ```
 
 Expected behavior:
-1. The CLI prints the URL to open in your browser
-2. It tries to open the browser automatically if possible, and otherwise tells you to open the URL manually
-3. The localhost callback receives `code` and `state`
+1. The CLI starts a local callback server and tries to open the browser
+2. With `--no-open` or if opening fails, it prints the URL to stderr for you to open manually
+3. The localhost callback receives `code` and `state`, and the CLI verifies the state (the default wait timeout is 120000 ms; override with `--listen-timeout-ms`)
 4. The CLI exchanges the code for tokens and saves them to the config file
 
-### Check saved credentials
+### Check the selected credentials
 
 ```bash
 asana-cli auth status
@@ -424,12 +445,10 @@ afterward Asana removes them permanently.
 
 ## Config file
 
-Default paths:
-
-```text
-$XDG_CONFIG_HOME/asana-cli/credentials.json
-~/.config/asana-cli/credentials.json
-```
+The default path uses `$XDG_CONFIG_HOME/asana-cli/credentials.json` when
+`XDG_CONFIG_HOME` is non-empty. Otherwise it uses Go's `os.UserConfigDir()`:
+- Linux: `~/.config/asana-cli/credentials.json`
+- macOS: `~/Library/Application Support/asana-cli/credentials.json`
 
 Persisted fields:
 - `clientId`
@@ -451,6 +470,7 @@ Override the path with `--config /path/to/credentials.json`.
 - `ASANA_API_BASE`: override the Asana API base URL
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: override the OAuth token endpoint
 - `BROWSER`: browser command used by `auth login`
+- `XDG_CONFIG_HOME`: preferred config directory root
 - `ASANA_PAT`: Personal Access Token for API commands. A non-empty value takes precedence over saved OAuth credentials, even with `--config`; it is not persisted.
 - `ASANA_CLIENT_SECRET`: enables automatic token refresh before API calls when the saved access token is expired or near expiration. The value is never persisted.
 
@@ -493,7 +513,7 @@ go run ./cmd/asana-cli --help
 go run ./cmd/asana-cli --version
 go run ./cmd/asana-cli --skill
 go run ./cmd/asana-cli auth url --client-id dummy --state fixed
-go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
+ASANA_PAT= go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```
 
 ### Git hooks (lefthook)

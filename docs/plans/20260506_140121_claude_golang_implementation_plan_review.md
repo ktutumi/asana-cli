@@ -58,7 +58,7 @@ Plan でも token / API / config / callback / 最終検証で hermetic な受け
 
 Plan では、collection の `compact` 出力を「header なし TSV 行」としています（`plan.md:61`、risk でも同趣旨 `plan.md:137`）。
 
-一方で、AGENTS と skill は `compact` を `field=value` lines と規定しています（`AGENTS.md:107-112`, `.claude/skills/asana-cli-go-development/SKILL.md:124-130`）。
+一方で、AGENTS と skill は `compact` を `field=value` lines と規定しています（`AGENTS.md:107-112`, `.claude/skills/asana-cli-development/SKILL.md:124-130`）。
 
 このまま実装すると、次の期待値が割れる可能性があります。
 
@@ -80,7 +80,7 @@ Plan では、collection の `compact` 出力を「header なし TSV 行」と�
 
 Plan では module path が「第一候補」かつ未決リスク扱いです（`plan.md:13`, `plan.md:133`）。
 
-しかし AGENTS は Project を `github.com/ktutumi/asana-cli-go` と明記しています（`AGENTS.md:7`）。
+しかし AGENTS は Project を `github.com/ktutumi/asana-cli` と明記しています（`AGENTS.md:7`）。
 
 実装計画では未決事項にせず、次の内容をこの module path に固定する方が安全です。
 
@@ -103,7 +103,7 @@ repo 現状を `git ls-files` で確認したところ、root `README.md` と `.
 
 しかし Task 10 acceptance には、query / fragment 拒否テストが明示されていません（`plan.md:67-68`）。
 
-skill は query / fragment 禁止を明確に要求しています（`.claude/skills/asana-cli-go-development/SKILL.md:117-122`）。
+skill は query / fragment 禁止を明確に要求しています（`.claude/skills/asana-cli-development/SKILL.md:117-122`）。
 
 acceptance に次の拒否テストを追加すると、security gate が堅くなります。
 

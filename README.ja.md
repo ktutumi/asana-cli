@@ -2,13 +2,14 @@
 
 言語: [English](README.md) | 日本語
 
-Go で書いた個人利用向け Asana OAuth / API CLI です。GitHub Releases から macOS / Linux 向けバイナリを配布できる前提で構成しています。
+Go で書いた個人利用向け Asana OAuth / PAT / API CLI です。GitHub Releases から macOS / Linux 向けバイナリを配布できる前提で構成しています。
 
 主な機能:
 - `auth url` で認可 URL を生成
 - `auth exchange` で authorization code を token に交換
 - `auth login` で localhost callback による自動ログイン
-- `auth status` で保存済み認証情報の状態を確認
+- `ASANA_PAT` で OAuth アプリなしの API 認証
+- `auth status` でローカルに選択される認証情報の source を確認
 - `auth refresh` で refresh token を使って access token を更新
 - `me`
 - `workspaces list`
@@ -19,7 +20,7 @@ Go で書いた個人利用向け Asana OAuth / API CLI です。GitHub Releases
 
 セキュリティ/UX 方針:
 - 設定ファイルは XDG Base Directory (`$XDG_CONFIG_HOME/asana-cli/credentials.json`) を優先
-- 設定ファイル権限は `0600` を維持
+- 設定ディレクトリ権限は `0700`、ファイル権限は `0600` を維持
 - `clientSecret` は保存しない
 - 標準出力に token を出すときは `access_token` / `refresh_token` を redact
 - `auth login` は `http://127.0.0.1/...` または `http://localhost/...` の redirect URI のみ許可
@@ -28,8 +29,10 @@ Go で書いた個人利用向け Asana OAuth / API CLI です。GitHub Releases
 
 ### go install
 
+ソースからのビルドと `go install` には Go 1.26 以降が必要です。
+
 ```bash
-go install github.com/ktutumi/asana-cli-go/cmd/asana-cli@latest
+go install github.com/ktutumi/asana-cli/cmd/asana-cli@latest
 ```
 
 ### ソースからビルド
@@ -47,37 +50,40 @@ GitHub Releases から以下を配布します。
 - `darwin-arm64`
 
 Releases 一覧:
-- https://github.com/ktutumi/asana-cli-go/releases
+- https://github.com/ktutumi/asana-cli/releases
 
-各 archive には対応する `.sha256` ファイルも添付されます。
+各 archive に対応する `.sha256` ファイルは別の release asset として添付されます。
+release tag には `v` が付きますが、archive と展開先ディレクトリ名には付きません。
 
 ファイル名の例:
-- `asana-cli-vX.Y.Z-linux-amd64.tar.gz`
-- `asana-cli-vX.Y.Z-linux-amd64.tar.gz.sha256`
+- `asana-cli-X.Y.Z-linux-amd64.tar.gz`
+- `asana-cli-X.Y.Z-linux-amd64.tar.gz.sha256`
 
 ダウンロード例:
 
+例の version はダウンロードする release に置き換えてください。
+
 Linux amd64:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-linux-amd64.tar.gz.sha256
 ```
 
 macOS Intel:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-darwin-amd64.tar.gz.sha256
 ```
 
 macOS Apple Silicon:
 ```bash
-VERSION=v0.1.0
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz
-curl -LO https://github.com/ktutumi/asana-cli-go/releases/download/${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
+VERSION=0.1.0
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz
+curl -LO https://github.com/ktutumi/asana-cli/releases/download/v${VERSION}/asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
 shasum -a 256 -c asana-cli-${VERSION}-darwin-arm64.tar.gz.sha256
 ```
 
@@ -97,8 +103,9 @@ xattr -dr com.apple.quarantine ./asana-cli
 
 展開例:
 ```bash
-VERSION=v0.1.0
+VERSION=0.1.0
 tar -xzf asana-cli-${VERSION}-linux-amd64.tar.gz
+cd asana-cli-${VERSION}-linux-amd64
 ./asana-cli --help
 ```
 
@@ -108,13 +115,11 @@ tar -xzf asana-cli-${VERSION}-linux-amd64.tar.gz
 
 Asana Developer Console で OAuth アプリを作成し、redirect URI を正確に登録してください。
 
-例:
-- `urn:ietf:wg:oauth:2.0:oob`
-- `http://127.0.0.1:18787/callback`
+既定の redirect URI: `http://127.0.0.1:18787/callback`。
 
 注意:
-- `auth login` は localhost callback 専用です
-- OOB/manual copy-paste を使うときは `auth url` + `auth exchange` を使ってください
+- `auth login` は HTTP の localhost / 127.0.0.1 callback 専用です。path は必須で、query / fragment と OOB redirect は許可しません
+- 手動交換には `auth url` + `auth exchange` を使い、同じ登録済み redirect URI を指定します。これらの command は callback server を起動しないため、自分で callback を受信して `state` を照合してから code を交換してください
 - localhost callback で `:0` はテスト用です。本番運用では固定ポートを登録してください
 
 ## Personal Access Token (PAT)
@@ -144,6 +149,11 @@ unset ASANA_PAT
 
 既定の出力形式は `table` です。必要に応じて `--output json` または `--output compact` を指定します。
 
+global flag の `--config` と `--output` は command より前に置きます。
+`auth status` は command 独自の `--config` も受け付けます。
+構文は `asana-cli tasks --help` など各 command の `--help` で確認できます。
+`project` は `projects`、対応する command の `ls` は `list` の alias です。
+
 ```bash
 asana-cli --output json workspaces list
 asana-cli --output table workspaces list
@@ -155,21 +165,32 @@ asana-cli --output compact tasks comments 789
 - `table`: ヘッダ付きの TSV 風表示。人が一覧を眺めやすい
 - `compact`: `field=value` の簡潔表示。collection は 1 item 1 line で表示
 
+単一 object の `table` は `field<TAB>value` を1行ずつ表示します。
+`table` と `compact` は値の backslash、tab、CR、LF を escape します。
+`auth login` / `auth exchange` / `auth refresh` は `--output json` 指定時以外、
+redact 済み token を `compact` で表示します。`auth url` は object ではなく URL を出力します。
+
 ### 認可 URL を出す
 
 ```bash
 asana-cli auth url \
   --client-id "$ASANA_CLIENT_ID" \
-  --state demo-state
+  --redirect-uri http://127.0.0.1:18787/callback
 ```
 
 ### manual flow で code を交換する
+
+`auth url` は既定でランダムな state を生成します。その値を保持し、callback の state を
+自分で照合してください。`auth exchange` は state を検証しません。
+例の `ASANA_CLIENT_ID` / `ASANA_CODE` は shell の変数であり、CLI が自動で読む環境変数ではありません。
+明示的な OAuth command には `--client-secret` が必要です。`ASANA_CLIENT_SECRET` の設定だけで
+有効になるのは API command の自動 refresh です。
 
 ```bash
 asana-cli auth exchange \
   --client-id "$ASANA_CLIENT_ID" \
   --client-secret "$ASANA_CLIENT_SECRET" \
-  --redirect-uri urn:ietf:wg:oauth:2.0:oob \
+  --redirect-uri http://127.0.0.1:18787/callback \
   --code "$ASANA_CODE"
 ```
 
@@ -193,12 +214,12 @@ asana-cli auth login \
 ```
 
 期待される挙動:
-1. CLI がブラウザで開くべき URL を出力
-2. 可能ならブラウザを自動起動し、失敗時は URL を手動で開くよう案内
-3. localhost callback が `code` と `state` を受信
+1. CLI が local callback server を起動し、ブラウザの自動起動を試行
+2. `--no-open` 指定時または起動失敗時は、手動で開く URL を stderr に出力
+3. localhost callback が `code` と `state` を受信し、CLI が state を照合（既定の待機時間は120000 ms、`--listen-timeout-ms` で変更可能）
 4. token を交換して設定ファイルへ保存
 
-### 保存済み認証情報の状態を確認する
+### 選択される認証情報の状態を確認する
 
 ```bash
 asana-cli auth status
@@ -397,12 +418,10 @@ CLI は無期限 polling を行いません。削除した task は削除実行 
 
 ## 設定ファイル
 
-既定パス:
-
-```text
-$XDG_CONFIG_HOME/asana-cli/credentials.json
-~/.config/asana-cli/credentials.json
-```
+`XDG_CONFIG_HOME` が空でなければ `$XDG_CONFIG_HOME/asana-cli/credentials.json` を使います。
+未設定時は Go の `os.UserConfigDir()` に従います。
+- Linux: `~/.config/asana-cli/credentials.json`
+- macOS: `~/Library/Application Support/asana-cli/credentials.json`
 
 保存される内容:
 - `clientId`
@@ -424,6 +443,7 @@ $XDG_CONFIG_HOME/asana-cli/credentials.json
 - `ASANA_API_BASE`: Asana API base URL を上書き
 - `ASANA_OAUTH_TOKEN_ENDPOINT`: OAuth token endpoint を上書き
 - `BROWSER`: `auth login` で使うブラウザコマンド
+- `XDG_CONFIG_HOME`: 優先する設定ディレクトリの root
 - `ASANA_PAT`: API command 用の Personal Access Token。空でない値は `--config` 指定時も保存済み OAuth credential より優先され、永続保存しません。
 - `ASANA_CLIENT_SECRET`: 保存済み access token が期限切れまたは期限間近の場合、API コール前に自動 refresh を有効化する。値は永続化されません。
 
@@ -466,7 +486,7 @@ go run ./cmd/asana-cli --help
 go run ./cmd/asana-cli --version
 go run ./cmd/asana-cli --skill
 go run ./cmd/asana-cli auth url --client-id dummy --state fixed
-go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
+ASANA_PAT= go run ./cmd/asana-cli auth status --config "$(mktemp -d)/credentials.json"
 ```
 
 ### Git hooks (lefthook)

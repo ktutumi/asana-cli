@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/ktutumi/asana-cli-go/internal/cli"
+	"github.com/ktutumi/asana-cli/internal/cli"
 )
 
 func main() {

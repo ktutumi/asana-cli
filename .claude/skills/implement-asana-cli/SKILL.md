@@ -1,9 +1,9 @@
 ---
-name: implement-asana-cli-go
-description: Use when implementing or fixing commands, flags, rendering, help text, Asana HTTP methods, OAuth flow, credential persistence, or related tests in the asana-cli-go repository before writing production changes.
+name: implement-asana-cli
+description: Use when implementing or fixing commands, flags, rendering, help text, Asana HTTP methods, OAuth flow, credential persistence, or related tests in the asana-cli repository before writing production changes.
 ---
 
-# Implement asana-cli-go Changes
+# Implement asana-cli Changes
 
 ## Overview
 
@@ -12,7 +12,7 @@ dependency-light patterns. Protect CLI behavior and authentication data with
 focused, hermetic tests.
 
 Announce that this skill is being used. Read `AGENTS.md` and
-`../asana-cli-go-development/SKILL.md` completely before editing repository
+`../asana-cli-development/SKILL.md` completely before editing repository
 files.
 
 ## Hard Gates

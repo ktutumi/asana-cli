@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ktutumi/asana-cli-go/internal/config"
+	"github.com/ktutumi/asana-cli/internal/config"
 )
 
 func writeFile(t *testing.T, path string, v any) {

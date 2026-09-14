@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ktutumi/asana-cli-go/internal/asana"
+	"github.com/ktutumi/asana-cli/internal/asana"
 )
 
 func tasksListCmd(args []string, io *CliIO, rt RuntimeOptions, c *asana.Client, token string) error {

@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ktutumi/asana-cli-go/internal/asana"
-	"github.com/ktutumi/asana-cli-go/internal/config"
-	"github.com/ktutumi/asana-cli-go/internal/oauth"
-	"github.com/ktutumi/asana-cli-go/skills/asana-cli-operator"
+	"github.com/ktutumi/asana-cli/internal/asana"
+	"github.com/ktutumi/asana-cli/internal/config"
+	"github.com/ktutumi/asana-cli/internal/oauth"
+	"github.com/ktutumi/asana-cli/skills/asana-cli-operator"
 )
 
 const Version = "0.1.0"

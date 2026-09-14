@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ktutumi/asana-cli-go/internal/cli"
-	"github.com/ktutumi/asana-cli-go/internal/config"
+	"github.com/ktutumi/asana-cli/internal/cli"
+	"github.com/ktutumi/asana-cli/internal/config"
 )
 
 const testPAT = "pat-test-opaque-123"

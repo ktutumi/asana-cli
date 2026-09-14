@@ -1,0 +1,4 @@
+interface:
+  display_name: "Implement Asana CLI Go"
+  short_description: "Implement focused Go CLI changes safely"
+  default_prompt: "Use $implement-asana-cli to implement this focused asana-cli change with tests and verification."

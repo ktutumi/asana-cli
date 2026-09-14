@@ -1,9 +1,9 @@
 ---
 name: review-asana-cli-security
-description: Use when performing final review of asana-cli-go changes that affect tests, OAuth, credential storage, filesystem permissions, secret handling, HTTP behavior, output compatibility, help, documentation, or release readiness.
+description: Use when performing final review of asana-cli changes that affect tests, OAuth, credential storage, filesystem permissions, secret handling, HTTP behavior, output compatibility, help, documentation, or release readiness.
 ---
 
-# Review asana-cli-go Test and Security Readiness
+# Review asana-cli Test and Security Readiness
 
 ## Overview
 
@@ -12,7 +12,7 @@ OAuth, compatibility, and documentation evidence. Never approve a patch with
 failing required tests, exposed secrets, or untested auth/config behavior.
 
 Announce that this skill is being used. Read `AGENTS.md` and
-`../asana-cli-go-development/SKILL.md` completely before starting the review.
+`../asana-cli-development/SKILL.md` completely before starting the review.
 Review only; do not modify code unless the user explicitly asks for fixes.
 
 ## Final Review Procedure

@@ -1,6 +1,6 @@
 ---
 name: review-asana-api
-description: Use when reviewing changes to internal/asana, internal/oauth, authentication commands, endpoint paths, query parameters, pagination, token exchange, or Asana HTTP error handling in the asana-cli-go repository.
+description: Use when reviewing changes to internal/asana, internal/oauth, authentication commands, endpoint paths, query parameters, pagination, token exchange, or Asana HTTP error handling in the asana-cli repository.
 ---
 
 # Review Asana API and OAuth Changes
@@ -12,7 +12,7 @@ and authoritative behavior. Report evidence-backed defects without changing
 code unless the user explicitly asks for fixes.
 
 Announce that this skill is being used. Read `AGENTS.md` and
-`../asana-cli-go-development/SKILL.md` completely before starting the review.
+`../asana-cli-development/SKILL.md` completely before starting the review.
 
 ## Review Procedure
 

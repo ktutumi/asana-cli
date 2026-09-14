@@ -1,4 +1,4 @@
-# Lefthook configuration for asana-cli-go
+# Lefthook configuration for asana-cli
 # See https://github.com/evilmartians/lefthook for details
 
 pre-commit:

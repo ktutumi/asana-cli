@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/ktutumi/asana-cli-go/internal/asana"
+	"github.com/ktutumi/asana-cli/internal/asana"
 )
 
 var projectValueFlags = []string{"name", "workspace", "notes", "html-notes", "color", "icon", "default-view", "privacy-setting", "archived", "owner", "start-on", "due-on", "default-access-level", "opt-fields"}

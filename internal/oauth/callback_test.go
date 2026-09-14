@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ktutumi/asana-cli-go/internal/oauth"
+	"github.com/ktutumi/asana-cli/internal/oauth"
 )
 
 func TestCallbackServerSuccess(t *testing.T) {

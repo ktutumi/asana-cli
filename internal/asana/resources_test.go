@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ktutumi/asana-cli-go/internal/asana"
+	"github.com/ktutumi/asana-cli/internal/asana"
 )
 
 func TestWriteObjectUsesMethodEnvelopeAndHeaders(t *testing.T) {

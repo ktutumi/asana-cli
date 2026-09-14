@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [asana, cli, oauth, productivity, go, terminal]
-    related_skills: [asana-cli-go-development]
+    related_skills: [asana-cli-development]
 ---
 
 # Asana CLI Operator
@@ -35,7 +35,7 @@ Trigger this skill when the user asks for things like:
 Also trigger when the current directory is this Go repository and the user asks to verify UX by running the current source tree.
 
 Do not use this skill to implement the CLI. For implementation and code review,
-use `.claude/skills/asana-cli-go-development/SKILL.md` and its focused skills.
+use `.claude/skills/asana-cli-development/SKILL.md` and its focused skills.
 
 ## Hard gates
 

@@ -34,7 +34,7 @@ Go プロジェクトの骨格を作り、CLI 実行口を `internal/cli` に委
 
 **変更内容**
 
-- module path は AGENTS の既定に従い、`github.com/ktutumi/asana-cli-go` に固定する。
+- module path は AGENTS の既定に従い、`github.com/ktutumi/asana-cli` に固定する。
 - `main.go` は `os.Args[1:]` を次へ渡す。
   - `cli.RunCLI(args, cli.NewStdIO(), cli.NewRuntimeOptionsFromEnv())`
 - `RunCLI` の戻り値を process exit code にする。
@@ -426,9 +426,9 @@ Rust 版の公開コマンドと alias を揃える。
 **変更内容**
 
 - インストール手順を Go に変更する。
-  - `go install github.com/ktutumi/asana-cli-go/cmd/asana-cli@latest`
+  - `go install github.com/ktutumi/asana-cli/cmd/asana-cli@latest`
   - `go build`
-- README / `go install` 例は module path `github.com/ktutumi/asana-cli-go` を前提にする。
+- README / `go install` 例は module path `github.com/ktutumi/asana-cli` を前提にする。
 - 次の内容を Go 版に合わせる。
   - コマンド一覧
   - OAuth app setup
@@ -526,7 +526,7 @@ Rust 固有 workflow を Go の検証へ移行する。
 既存ファイルは更新する。README / workflow は、存在しなければ新規作成する。
 
 - `README.md`（既存なら更新、なければ新規作成）  
-  Rust の開発・インストール・release 説明を Go 実装に合わせて更新し、`go install github.com/ktutumi/asana-cli-go/cmd/asana-cli@latest` を前提にする。
+  Rust の開発・インストール・release 説明を Go 実装に合わせて更新し、`go install github.com/ktutumi/asana-cli/cmd/asana-cli@latest` を前提にする。
 - `README.ja.md`（既存なら更新、なければ必要に応じて新規作成）  
   README と同じコマンド仕様・Go 手順へ更新する。
 - `.github/workflows/ci.yml`（既存なら更新、なければ `.github/workflows/` ごと新規作成）  
@@ -539,7 +539,7 @@ Rust 固有 workflow を Go の検証へ移行する。
 ## 新規作成ファイル
 
 - `go.mod`  
-  Go module 定義。module path は `github.com/ktutumi/asana-cli-go` に固定する。
+  Go module 定義。module path は `github.com/ktutumi/asana-cli` に固定する。
 - `cmd/asana-cli/main.go`  
   CLI binary entrypoint。
 - `internal/cli/cli.go`  

@@ -1,5 +1,5 @@
 ---
-name: asana-cli-go-development
+name: asana-cli-development
 description: Use when implementing, reviewing, or planning changes to commands, flags, output, OAuth, credential storage, or Asana HTTP behavior in this Go repository.
 version: 1.1.0
 author: Project Agents
@@ -10,7 +10,7 @@ metadata:
     related_skills: [test-driven-development, systematic-debugging, requesting-code-review]
 ---
 
-# asana-cli-go Development
+# asana-cli Development
 
 ## Overview
 
@@ -18,7 +18,7 @@ Use the repository's existing, dependency-light patterns instead of inventing ne
 abstractions. Protect authentication data and public CLI behavior with focused,
 hermetic tests.
 
-The Go module is `github.com/ktutumi/asana-cli-go`. It provides Asana OAuth,
+The Go module is `github.com/ktutumi/asana-cli`. It provides Asana OAuth,
 local credential storage, and read-only API commands.
 
 ## When to Use
@@ -149,7 +149,7 @@ nested fields already supported by `value`.
 
 Read only the focused skill needed for the current task:
 
-- `.claude/skills/implement-asana-cli-go/SKILL.md`: focused CLI implementation
+- `.claude/skills/implement-asana-cli/SKILL.md`: focused CLI implementation
   and tests.
 - `.claude/skills/review-asana-api/SKILL.md`: read-only review of endpoint,
   query, pagination, OAuth, and error behavior.

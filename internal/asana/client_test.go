@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ktutumi/asana-cli-go/internal/asana"
+	"github.com/ktutumi/asana-cli/internal/asana"
 )
 
 func TestExchangeCodeForTokenRequestBodyAndMethod(t *testing.T) {

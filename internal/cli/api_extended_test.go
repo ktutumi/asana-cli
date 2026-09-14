@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ktutumi/asana-cli-go/internal/cli"
+	"github.com/ktutumi/asana-cli/internal/cli"
 )
 
 func TestTaskCreateAndUpdateRequests(t *testing.T) {
